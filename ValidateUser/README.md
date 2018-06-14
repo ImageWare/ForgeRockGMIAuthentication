@@ -13,7 +13,7 @@
  *
  * Copyright ${data.get('yyyy')} ForgeRock AS.
 -->
-# GMIValidateUser
+# ValidateUser
 
 A simple authentication node for ForgeRock's [Identity Platform][forgerock_platform] 5.5 and above. This node... **SHORT DESCRIPTION HERE**
 

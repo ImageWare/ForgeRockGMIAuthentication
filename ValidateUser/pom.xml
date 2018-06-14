@@ -42,6 +42,52 @@
             <name>ForgeRock Private Release Repository</name>
             <url>http://maven.forgerock.org/repo/private-releases</url>
         </repository>
+        <repository>
+                <id>iws.artifactory.libs-release-local</id>
+                <url>http://artifactory.iws.com:8081/artifactory/libs-release-local/</url>
+            </repository>
+            <repository>
+                <id>iws.artifactory.libs-release</id>
+                <url>http://artifactory.iws.com:8081/artifactory/libs-release/</url>
+            </repository>
     </repositories>
 
+    <dependencies>
+       <dependency>
+          <groupId>com.iwsinc</groupId>
+          <artifactId>UserManagerClient</artifactId>
+          <version>1.0.0</version>
+        </dependency>
+    </dependencies>
+    
+    <build>
+		<finalName>ValidateUser-1.0.0</finalName>
+		<plugins>
+
+		<!-- Maven Shade Plugin -->
+		<plugin>
+		  <groupId>org.apache.maven.plugins</groupId>
+		  <artifactId>maven-shade-plugin</artifactId>
+		  <version>2.3</version>
+		  <executions>
+		     <!-- Run shade goal on package phase -->
+		    <execution>
+			<phase>package</phase>
+			<goals>
+				<goal>shade</goal>
+			</goals>
+			<configuration>
+			
+			 <artifactSet>
+                <includes>
+                  <include>com.iwsinc:*</include>
+                </includes>
+              </artifactSet>
+			</configuration>
+		      </execution>
+		  </executions>
+		</plugin>
+
+		</plugins>
+	</build>
 </project>
