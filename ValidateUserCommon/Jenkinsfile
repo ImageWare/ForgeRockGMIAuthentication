@@ -37,6 +37,7 @@ node("${nodeNameCentos}") {
                 echo "packageType = ${packageType}"
                 artifactType = packageType.substring(packageType.indexOf(">") + 1, packageType.indexOf("</")).trim()
                 echo "artifactType = ${artifactType}"
+	    }
 
 
             stage('InstallMaven') {
@@ -105,7 +106,7 @@ node("${nodeNameCentos}") {
             }
     */        
         }
-    }
+    
     catch(Exception e) {
         stage('UpdateFailedJiraComment') {
             build job: 'p_add_jira_comment', 
