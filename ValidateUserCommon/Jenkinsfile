@@ -21,6 +21,24 @@ node("${nodeNameCentos}") {
                 deleteDir()
             }
         
+	 stage('GitClone') {
+                checkout changelog: false,
+                         poll: false,
+                         scm: [$class: 'GitSCM',
+                               branches: [[name: "refs/tags/${TAG}"]],
+                               doGenerateSubmoduleConfigurations: false,
+                               extensions: [],
+                               submoduleCfg: [],
+                               userRemoteConfigs: [[credentialsId: 'IWSGithub',
+                                                    name: 'origin',
+                                                    url: 'https://github.com/ImageWare/ForgeRockGMIAuthentication']]]
+
+                packageType = sh(returnStdout: true, script: 'grep packaging pom.xml')
+                echo "packageType = ${packageType}"
+                artifactType = packageType.substring(packageType.indexOf(">") + 1, packageType.indexOf("</")).trim()
+                echo "artifactType = ${artifactType}"
+
+
             stage('InstallMaven') {
                 build job: 'p_install_maven',
                   parameters: [[$class: 'StringParameterValue', name: 'OS', value: 'centos'],
@@ -28,17 +46,6 @@ node("${nodeNameCentos}") {
                                [$class: 'StringParameterValue', name: 'MAVEN_VERSION', value: '3.3.9']]
             }
         
-            stage('CheckoutProject') {
-              git 'git@github.com:ImageWare/ForgeRockGMIAuthentication'
-                sh "git checkout ${TAG}"
-                
-                // now determine the deployable artifact type (war, jar, ...)
-                packageType = sh(returnStdout: true, script: 'grep packaging pom.xml')
-                echo "packageType = ${packageType}"
-                artifactType = packageType.substring(packageType.indexOf(">") + 1, 
-                                             packageType.indexOf("</")).trim()
-                echo "artifactType = ${artifactType}"
-            }
        
             stage('BuildProject') {
                 def server = Artifactory.server('IWSArtifactoryServer')
