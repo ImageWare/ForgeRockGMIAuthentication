@@ -107,6 +107,7 @@ node("${nodeNameCentos}") {
     */        
         }
     
+    }
     catch(Exception e) {
         stage('UpdateFailedJiraComment') {
             build job: 'p_add_jira_comment', 
