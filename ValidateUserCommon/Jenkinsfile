@@ -1,0 +1,121 @@
+/*
+    Build the IdentityManagerCommon project
+    
+    Params:
+        TAG     The Git branch to checkout and build    Default value: master
+            String parameter
+*/
+def nodeNameCentos = "GMIServerBuilder-Centos7"
+def jiraIssue = "GS-423"
+def artifactType
+def runSonar = 'No'
+
+node("${nodeNameCentos}") {
+    echo "The Centos node name is '${nodeNameCentos}'"
+    echo "The Git branch that will be checked out and built: ${TAG}"
+    echo "Run a Sonar scan on this build: ${runSonar}"
+    
+    try {
+        timeout(time: 10, unit: 'MINUTES') {
+            stage('CleanUp') {
+                deleteDir()
+            }
+        
+            stage('InstallMaven') {
+                build job: 'p_install_maven',
+                  parameters: [[$class: 'StringParameterValue', name: 'OS', value: 'centos'],
+                               [$class: 'StringParameterValue', name: 'NODE', value: "${nodeNameCentos}"],
+                               [$class: 'StringParameterValue', name: 'MAVEN_VERSION', value: '3.3.9']]
+            }
+        
+            stage('CheckoutProject') {
+              git 'git@github.com:ImageWare/ForgeRockGMIAuthentication'
+                sh "git checkout ${TAG}"
+                
+                // now determine the deployable artifact type (war, jar, ...)
+                packageType = sh(returnStdout: true, script: 'grep packaging pom.xml')
+                echo "packageType = ${packageType}"
+                artifactType = packageType.substring(packageType.indexOf(">") + 1, 
+                                             packageType.indexOf("</")).trim()
+                echo "artifactType = ${artifactType}"
+            }
+       
+            stage('BuildProject') {
+                def server = Artifactory.server('IWSArtifactoryServer')
+                def rtMaven = Artifactory.newMavenBuild()
+                rtMaven.resolver server: server, releaseRepo: 'libs-release', snapshotRepo: 'libs-snapshot'
+                rtMaven.deployer server: server, releaseRepo: 'libs-release-local', snapshotRepo: 'libs-snapshot-local'
+                rtMaven.deployer.artifactDeploymentPatterns.addInclude("*.${artifactType}")
+                rtMaven.tool = 'M3'
+                def buildInfo = rtMaven.run pom: 'pom.xml', goals: 'clean install'
+                server.publishBuildInfo buildInfo
+            }
+
+            if ("${runSonar}" == 'Yes') {
+                try {
+                    stage('GetSonarFiles') {
+                        sonarRootDir = "${WORKSPACE}"
+                        sonarProjectFile = "Java"
+                        sonarProjectfileDir = "${WORKSPACE}/Java"
+                        echo "p_get_sonar_files params are:  SONAR_ROOT_DIR = '${sonarRootDir}', SONAR_PROJECT_FILE = '${sonarProjectFile}', SONAR_PROJECT_FILE_DIR = '${sonarProjectfileDir}, NODE = '${nodeNameCentos}'"
+                        build job: 'p_get_sonar_files', 
+                              parameters: [[$class: 'StringParameterValue', name: 'SONAR_ROOT_DIR', value: "${sonarRootDir}"],
+                                           [$class: 'StringParameterValue', name: 'SONAR_PROJECT_FILE', value: "${sonarProjectFile}"],
+                                           [$class: 'StringParameterValue', name: 'SONAR_PROJECT_FILE_DIR', value: "${sonarProjectfileDir}"],
+                                           [$class: 'StringParameterValue', name: 'NODE', value: "${nodeNameCentos}"]]
+                        sh "sed -i \"s^__SHORT_PROJECT_NAME__^${JOB_NAME}^g\" ${sonarProjectfileDir}/sonar-project${sonarProjectFile}.properties"
+                        sh "sed -i \"s^__PROJECT_NAME__^${JOB_NAME}^g\" ${sonarProjectfileDir}/sonar-project${sonarProjectFile}.properties"
+                        sh "sed -i \"s^__VER_NUM__^${TAG}^g\" ${sonarProjectfileDir}/sonar-project${sonarProjectFile}.properties"
+                        sh "cp ${WORKSPACE}/${sonarProjectFile}/sonar-project${sonarProjectFile}.properties ${WORKSPACE}/sonar-project.properties"
+                        sh "rm -fR ${sonarProjectFile}"
+                    }
+
+                    stage('RunSonarScan') {
+                        sh './sonar-scanner/bin/sonar-scanner'
+                        echo " "
+                        echo "The SonarQube scan is available at:  http://sonar.iws.com:9000/dashboard?id=Jenkins%3A${JOB_NAME}"
+                        echo " "
+                    }
+                }
+                catch(Exception e) {
+                    echo 'Unable to run the Sonar scan on this job.  There was a problem accessing the Sonar server at http://sonar.iws.com:9000.'
+                    slackSend message: "The ${JOB_NAME} build, build #$currentBuild.number, was unable to run the Sonar scan.  There was a problem accessing the Sonar server at http://sonar.iws.com:9000.", 
+                              color: 'warning'
+                }
+            }
+
+            stage('UpdateJiraComment') {
+                build job: 'p_add_jira_comment', 
+                      parameters: [[$class: 'StringParameterValue', name: 'JIRA_ISSUE', 
+                                    value: "${jiraIssue}"],
+                                   [$class: 'StringParameterValue', name: 'JIRA_COMMENT', 
+                                    value: "The ValidateUserCommon build, build ${JOB_NAME} #$currentBuild.number, has completed successfully."]]
+            }
+    /*
+            stage('SendSlackComment') {
+                slackSend message: "The ${JOB_NAME} build, build #$currentBuild.number, has completed successfully.", 
+                          color: 'good'
+            }
+    */        
+        }
+    }
+    catch(Exception e) {
+        stage('UpdateFailedJiraComment') {
+            build job: 'p_add_jira_comment', 
+                  parameters: [[$class: 'StringParameterValue', name: 'JIRA_ISSUE', 
+                                value: "${jiraIssue}"],
+                               [$class: 'StringParameterValue', name: 'JIRA_COMMENT', 
+                                value: "The IdentityManagerCommon build FAILED.  Job: ${JOB_NAME}-${BUILD_NUMBER}. See the console output at ${BUILD_URL}"]]
+        }
+        
+        stage('SendFailedSlackComment') {
+            slackSend message: "The ${JOB_NAME} build, build #$currentBuild.number, FAILED.", 
+                      color: 'danger'
+        }
+        
+        currentBuild.result = 'FAILURE'
+    }
+    finally {
+    }
+}
+
