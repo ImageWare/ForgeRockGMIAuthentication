@@ -44,7 +44,7 @@ import com.sun.identity.shared.debug.Debug;
  * A node that checks to see if zero-page login headers have specified username and shared key 
  * for this request. 
  */
-@Node.Metadata(outcomeProvider  = ValidateUserOutcomeProvider.class,
+@Node.Metadata(outcomeProvider  = AbstractDecisionNode.OutcomeProvider.class,
                configClass      = ValidateUserDecision.Config.class)
 public class ValidateUserDecision extends AbstractDecisionNode {
 
@@ -84,7 +84,8 @@ public class ValidateUserDecision extends AbstractDecisionNode {
     	verified = handleVerifyResponse(verifyResponseUrl, accessToken);
     	if (verified == null)
     	{
-    		return goTo(ValidateUserOutcomeProvider.UNANSWERED).build();
+    		//return goTo(ValidateUserOutcomeProvider.UNANSWERED).build();
+        	return goTo(false).build();
     	}
     	else if (verified != null && verified)
         {

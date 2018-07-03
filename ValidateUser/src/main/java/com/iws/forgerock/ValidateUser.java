@@ -19,9 +19,6 @@ package com.iws.forgerock;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 
-import java.util.Arrays;
-import java.util.List;
-
 import javax.inject.Inject;
 
 import org.apache.commons.codec.binary.Base64;
@@ -107,7 +104,7 @@ public class ValidateUser extends AbstractDecisionNode
 		
 
 		@Attribute(order = 700)
-		default String getTemplateName()
+		default String gmiTemplateName()
 		{
 			return "GoVerifyID-Template-Name";
 		}
@@ -143,6 +140,12 @@ public class ValidateUser extends AbstractDecisionNode
 		debug.error("[" + DEBUG_FILE + "]: " + "Username {}.", username);
 
 		AMIdentity userIdentity = coreWrapper.getIdentity(username, context.sharedState.get(REALM).asString());
+		if (userIdentity == null)
+		{
+			debug.error("[" + DEBUG_FILE + "]: " + "Authentication failed in {}. User: '{}' does not exist.", Constants.IMAGEWARE_APPLICATION_NAME, username);
+			return goTo(false).build();
+		}
+		
 		try
 		{
 			if (userIdentity.getAttribute("mail").size() != 0)
@@ -154,15 +157,18 @@ public class ValidateUser extends AbstractDecisionNode
 			else
 			{
 				debug.error("[" + DEBUG_FILE + "]: " + "Authentication failed in {}. User: '{}' has no email address in profile.", Constants.IMAGEWARE_APPLICATION_NAME, username);
+				return goTo(false).build();
 			}
 		}
 		catch (IdRepoException e)
 		{
 			debug.error("[" + DEBUG_FILE + "]: " + "Error locating user '{}' ", e);
+			return goTo(false).build();
 		}
 		catch (SSOException e)
 		{
 			debug.error("[" + DEBUG_FILE + "]: " + "Error locating user '{}' ", e);
+			return goTo(false).build();
 		}
 
 		String tenant = config.tenantNameHeader();
@@ -170,8 +176,8 @@ public class ValidateUser extends AbstractDecisionNode
 		String clientSecret = config.clientSecretHeader();
 		String userManagerURL = config.userManagerURL();
 		String gmiServerURL = config.gmiServerURL();
-		String app = "GoVerifyID";
-		String template = "GVID_VERIFY_CHOICE";
+		String app = config.gmiApplicationName();
+		String template = config.gmiTemplateName();
 
 		userManagerURL += "/oauth/token?scope=ignored&grant_type=client_credentials";
 
@@ -184,11 +190,24 @@ public class ValidateUser extends AbstractDecisionNode
 			{
 				debug.message("[" + DEBUG_FILE + "]: " + "validateUser returning true and moving to next step");
 
-				if (biometricVerifyUser(person, token, gmiServerURL, tenant, app, template))
-				{
+				String reason = "ForgeRock custom authentication";
+				int expiresIn = 120;
+				String templatePath = gmiServerURL + "/tenant/" + tenant + "/app/" + app + "/template/" + template;
+				String gmiMessageUrl = templatePath + "/person/" + person.getId() + "/message";
 
+				String messageJson = "{" + "\"maxResponseAttempts\" : 3," + "\"template\" : \"" + templatePath + "\"," + "\"metadata\" :" + "{" + "\"reason\" :\"" + reason + "\"" + "}," + "\"expiresIn\" :" + expiresIn + "}";
+				String verifyResponseUrlTemp = gmiServerURL + "/tenant/" + tenant + "/person/" + person.getId() + "/message/%s/response";
+
+				debug.message("[" + DEBUG_FILE + "]: " + "IWS Message JSON: {} ", messageJson);
+				
+				if (biometricVerifyUser(context, person, token, gmiMessageUrl, verifyResponseUrlTemp, messageJson))
+				{
+					
 					debug.message("[" + DEBUG_FILE + "]: " + "biometricVerifyUser returning true and completing authentication");
-					return goTo(true).replaceSharedState(context.sharedState.copy().put(USERNAME, username).put(Constants.IMAGEWARE_OAUTH_BEARER_TOKEN, token)).build();
+					return goTo(true).replaceSharedState(context.sharedState.copy().
+							put(USERNAME, username).
+							put(Constants.IMAGEWARE_OAUTH_BEARER_TOKEN, token.getAccessToken())).
+							build();
 				}
 				else
 				{
@@ -205,24 +224,16 @@ public class ValidateUser extends AbstractDecisionNode
 		}
 		else
 		{
-			debug.error("[" + DEBUG_FILE + "]: " + "{} Oauth bearer token not set in {} for User '{}' of Tenant '{}'", Constants.IMAGEWARE_APPLICATION_NAME, username, tenant);
+			debug.error("[" + DEBUG_FILE + "]: " + "Oauth bearer token not set in {} for User '{}' of Tenant '{}'", Constants.IMAGEWARE_APPLICATION_NAME, username, tenant);
 			return goTo(false).build();
 		}
 
 	}
 
-	private boolean biometricVerifyUser(Person person, OauthBearerToken token, String gmiServerUrl, String tenant, String app, String template)
+	
+	private boolean biometricVerifyUser(TreeContext context, Person person, OauthBearerToken token, String gmiMessageUrl, String gmiVerifyUrlTemp, String messageJson)
 	{
 		Boolean returnValue = null;
-		String reason = "ForgeRock custom authentication";
-		int expiresIn = 120;
-		String templatePath = gmiServerUrl + "/tenant/" + tenant + "/app/" + app + "/template/" + template;
-		String gmiMessageUrl = templatePath + "/person/" + person.getId() + "/message";
-
-		String messageJson = "{" + "\"maxResponseAttempts\" : 3," + "\"template\" : \"" + templatePath + "\"," + "\"metadata\" :" + "{" + "\"reason\" :\"" + reason + "\"" + "}," + "\"expiresIn\" :" + expiresIn + "}";
-
-		debug.message("[" + DEBUG_FILE + "]: " + "IWS Message JSON: {} ", messageJson);
-
 		CloseableHttpResponse response = null;
 
 		try
@@ -254,12 +265,17 @@ public class ValidateUser extends AbstractDecisionNode
 						// com.iwsinc.forgerock.Person class
 						objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 						Message message = objectMapper.readValue(jsonResponse, Message.class);
-
-						String verifyResponseUrl = gmiServerUrl + "/tenant/" + tenant + "/person/" + person.getId() + "/message/" + message.getMessageId() + "/response";
-
-						debug.message("[" + DEBUG_FILE + "]: " + "biometricVerifyUser returning true for sending message and moving to next step");
-
 						
+						if (message == null || message.getMessageId() == null)
+						{
+							debug.error("[" + DEBUG_FILE + "]: " + "biometricVerifyUser cannot read GMI Message");
+							return false;
+							
+						}
+
+						String verifyResponseUrl = String.format(gmiVerifyUrlTemp, message.getMessageId());
+						context.sharedState.put(Constants.IMAGEWARE_VERIFY_URL, verifyResponseUrl);
+						debug.message("[" + DEBUG_FILE + "]: " + "biometricVerifyUser returning true for sending message and moving to next step");
 						
 						// poll and wait for response
 						return true;

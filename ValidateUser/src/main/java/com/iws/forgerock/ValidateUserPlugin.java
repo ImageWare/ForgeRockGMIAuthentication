@@ -16,17 +16,13 @@
 
 package com.iws.forgerock;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
-
-import javax.inject.Inject;
 
 import org.forgerock.openam.auth.node.api.AbstractNodeAmPlugin;
 import org.forgerock.openam.auth.node.api.Node;
 import org.forgerock.openam.plugins.PluginException;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 
 /**
@@ -73,7 +69,8 @@ public class ValidateUserPlugin extends AbstractNodeAmPlugin {
 	@Override
 	protected Map<String, Iterable<? extends Class<? extends Node>>> getNodesByVersion() {
 		return Collections.singletonMap(ValidateUserPlugin.currentVersion, 
-				Collections.singletonList(ValidateUser.class));
+				//Collections.singletonList(ValidateUser.class));
+				Arrays.asList(ValidateUser.class, ValidateUserDecision.class));
 	}
 
     /** 
