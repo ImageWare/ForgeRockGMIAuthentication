@@ -1,20 +1,3 @@
-/*
- * The contents of this file are subject to the terms of the Common Development and
- * Distribution License (the License). You may not use this file except in compliance with the
- * License.
- *
- * You can obtain a copy of the License at legal/CDDLv1.0.txt. See the License for the
- * specific language governing permission and limitations under the License.
- *
- * When distributing Covered Software, include this CDDL Header Notice in each file and include
- * the License file at legal/CDDLv1.0.txt. If applicable, add the following below the CDDL
- * Header, with the fields enclosed by brackets [] replaced by your own identifying
- * information: "Portions copyright [year] [name of copyright owner]".
- *
- * Copyright 2018 ForgeRock AS.
- */
-
-
 package com.iws.forgerock;
 
 import java.util.Arrays;
@@ -27,12 +10,16 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
-import org.forgerock.openam.auth.node.api.AbstractDecisionNode;
+import org.forgerock.guava.common.collect.ImmutableList;
+import org.forgerock.json.JsonValue;
 import org.forgerock.openam.auth.node.api.Action;
+import org.forgerock.openam.auth.node.api.Action.ActionBuilder;
 import org.forgerock.openam.auth.node.api.Node;
 import org.forgerock.openam.auth.node.api.NodeProcessException;
+import org.forgerock.openam.auth.node.api.OutcomeProvider;
 import org.forgerock.openam.auth.node.api.TreeContext;
 import org.forgerock.openam.core.CoreWrapper;
+import org.forgerock.util.i18n.PreferredLocales;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,40 +27,43 @@ import com.google.inject.assistedinject.Assisted;
 import com.iwsinc.usermanager.exception.UserManagerCallFailedException;
 import com.sun.identity.shared.debug.Debug;
 
-/** 
- * A node that checks to see if zero-page login headers have specified username and shared key 
- * for this request. 
- */
-@Node.Metadata(outcomeProvider  = AbstractDecisionNode.OutcomeProvider.class,
-               configClass      = ValidateUserDecision.Config.class)
-public class ValidateUserDecision extends AbstractDecisionNode {
+@Node.Metadata(outcomeProvider = ValidateUserDecision.ValidateUserDecisionOutcomeProvider.class, configClass = ValidateUserDecision.Config.class)
+public class ValidateUserDecision implements Node
+{
 
-    private final Config config;
-    private final CoreWrapper coreWrapper;
-    private final static String DEBUG_FILE = "ValidateUserDecision";
-    protected Debug debug = Debug.getInstance(DEBUG_FILE);
+	private final Config config;
+	private final CoreWrapper coreWrapper;
+	private final static String DEBUG_FILE = "ValidateUserDecision";
+	protected Debug debug = Debug.getInstance(DEBUG_FILE);
 
-    /**
-     * Configuration for the node.
-     */
-    public interface Config {
-       
-    }
+	/**
+	 * Configuration for the node.
+	 */
+	public interface Config
+	{
 
+	}
 
-    /**
+	/**
      * Create the node.
      * @param config The service config.
      * @throws NodeProcessException If the configuration was not valid.
      */
     @Inject
-    public ValidateUserDecision(@Assisted Config config, CoreWrapper coreWrapper) throws NodeProcessException {
+    public ValidateUserDecision(@Assisted Config config, CoreWrapper coreWrapper) throws NodeProcessException 
+    {
         this.config = config;
         this.coreWrapper = coreWrapper;
     }
 
-    @Override
-    public Action process(TreeContext context) throws NodeProcessException {
+    private ActionBuilder goTo(ValidateUserOutcome outcome) {
+        return Action.goTo(outcome.name());
+    }
+
+	@Override
+	public Action process(TreeContext context) throws NodeProcessException
+	{
+		debug.message("ValidateUserDecisionPolling started");
 
     	Boolean verified = false;
     	String verifyResponseUrl = context.sharedState.get(Constants.IMAGEWARE_VERIFY_URL).asString();
@@ -84,19 +74,20 @@ public class ValidateUserDecision extends AbstractDecisionNode {
     	verified = handleVerifyResponse(verifyResponseUrl, accessToken);
     	if (verified == null)
     	{
-    		//return goTo(ValidateUserOutcomeProvider.UNANSWERED).build();
-        	return goTo(false).build();
+        	return goTo(ValidateUserOutcome.UNANSWERED).build();
     	}
     	else if (verified != null && verified)
         {
-        	return goTo(true).build();
+        	return goTo(ValidateUserOutcome.TRUE).build();
         }
         else 
         {
-        	return goTo(false).build();
+        	return goTo(ValidateUserOutcome.FALSE).build();
         }
-    }
-    
+    	
+	}
+
+
 
 	private Boolean handleVerifyResponse(String verifyResponseUrl, String accessToken)
 	{
@@ -227,5 +218,42 @@ public class ValidateUserDecision extends AbstractDecisionNode {
 
 		return verifyComplete;
 	}
+	
+	
+    /**
+     * The possible outcomes for the ValidateUserDecision node.
+     */
+    public enum ValidateUserOutcome 
+    {
+        /**
+         * Successful authentication.
+         */
+        TRUE,
+        /**
+         * Authentication failed.
+         */
+        FALSE,
+        /**
+         * The GMI/GVID message has not been received yet.
+         */
+        UNANSWERED
+    }
+
+    /**
+     * Defines the possible outcomes from this Ldap node.
+     */
+    public static class ValidateUserDecisionOutcomeProvider implements OutcomeProvider 
+    {
+        @Override
+        public List<Outcome> getOutcomes(PreferredLocales locales, JsonValue nodeAttributes) 
+        {
+            //ResourceBundle bundle = locales.getBundleInPreferredLocale(ValidateUserDecision.BUNDLE, ValidateUserDecisionOutcomeProvider.class.getClassLoader());
+            return ImmutableList.of(
+                    new Outcome(ValidateUserOutcome.TRUE.name(), "True" /*bundle.getString("trueOutcome")*/),
+                    new Outcome(ValidateUserOutcome.FALSE.name(), "False" /*bundle.getString("falseOutcome")*/),
+                    new Outcome(ValidateUserOutcome.UNANSWERED.name(), "Unanswered" /*bundle.getString("lockedOutcome")*/));
+        }
+    }
+
 
 }
