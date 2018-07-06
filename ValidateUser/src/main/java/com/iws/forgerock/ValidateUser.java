@@ -66,47 +66,47 @@ public class ValidateUser extends AbstractDecisionNode
 	public interface Config
 	{
 		@Attribute(order = 100)
-		default String tenantNameHeader()
+		default String tenantName()
 		{
-			return "GoVerifyID-Tenant-Name";
+			return "";
 		}
 
 		@Attribute(order = 200)
-		default String clientNameHeader()
+		default String clientName()
 		{
-			return "GoVerifyID-Client-Name";
+			return "";
 		}
 
 		@Attribute(order = 300)
-		default String clientSecretHeader()
+		default String clientSecret()
 		{
-			return "GoVerifyID-Client-Secret";
+			return "";
 		}
 
 		@Attribute(order = 400)
 		default String userManagerURL()
 		{
-			return "GoVerifyID-UserManager-URL";
+			return "https://gmi-ha.iwsinc.com/usermanager";
 		}
 
 		@Attribute(order = 500)
 		default String gmiServerURL()
 		{
-			return "GoVerifyID-GMIServer-URL";
+			return "https://gmi-ha.iwsinc.com/gmiserver";
 		}
 		
 
 		@Attribute(order = 600)
 		default String gmiApplicationName()
 		{
-			return "GoVerifyID-App-Name";
+			return "GoVerifyID";
 		}
 		
 
 		@Attribute(order = 700)
 		default String gmiTemplateName()
 		{
-			return "GoVerifyID-Template-Name";
+			return "GVID_VERIFY_CHOICE";
 		}
 	}
 
@@ -171,9 +171,9 @@ public class ValidateUser extends AbstractDecisionNode
 			return goTo(false).build();
 		}
 
-		String tenant = config.tenantNameHeader();
-		String clientName = config.clientNameHeader();
-		String clientSecret = config.clientSecretHeader();
+		String tenant = config.tenantName();
+		String clientName = config.clientName();
+		String clientSecret = config.clientSecret();
 		String userManagerURL = config.userManagerURL();
 		String gmiServerURL = config.gmiServerURL();
 		String app = config.gmiApplicationName();
@@ -233,7 +233,7 @@ public class ValidateUser extends AbstractDecisionNode
 	
 	private boolean biometricVerifyUser(TreeContext context, Person person, OauthBearerToken token, String gmiMessageUrl, String gmiVerifyUrlTemp, String messageJson)
 	{
-		Boolean returnValue = null;
+		boolean returnValue = false;
 		CloseableHttpResponse response = null;
 
 		try
@@ -260,9 +260,6 @@ public class ValidateUser extends AbstractDecisionNode
 					if (response.getStatusLine().getStatusCode() == org.apache.http.HttpStatus.SC_CREATED)
 					{
 						ObjectMapper objectMapper = new ObjectMapper();
-						// ignore existing Person Metadata and BiometricMetadata
-						// properties which are not included in
-						// com.iwsinc.forgerock.Person class
 						objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 						Message message = objectMapper.readValue(jsonResponse, Message.class);
 						
@@ -273,18 +270,16 @@ public class ValidateUser extends AbstractDecisionNode
 							
 						}
 
+						// share verification response url in state for retrieval later
 						String verifyResponseUrl = String.format(gmiVerifyUrlTemp, message.getMessageId());
 						context.sharedState.put(Constants.IMAGEWARE_VERIFY_URL, verifyResponseUrl);
 						debug.message("[" + DEBUG_FILE + "]: " + "biometricVerifyUser returning true for sending message and moving to next step");
 						
-						// poll and wait for response
 						return true;
-						//returnValue = handleVerifyResponse(verifyResponseUrl, token, expiresIn);
 					}
 					else
 					{
 						debug.error("[" + DEBUG_FILE + "]: " + "GMI verification failed in {} error response: '{}: {}'", Constants.IMAGEWARE_APPLICATION_NAME, response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase());
-
 					}
 				}
 			}
@@ -298,7 +293,6 @@ public class ValidateUser extends AbstractDecisionNode
 		catch (Exception exp)
 		{
 			debug.error(exp.getMessage());
-
 		}
 		finally
 		{
@@ -310,11 +304,11 @@ public class ValidateUser extends AbstractDecisionNode
 				}
 				catch (Throwable t)
 				{
-				}
+				}	
 			}
 		}
 
-		return (returnValue == null) ? false : returnValue;
+		return returnValue;
 	}
 
 	private Person validateUser(String username, OauthBearerToken token, String tenant, String gmiServerURL)
@@ -344,9 +338,6 @@ public class ValidateUser extends AbstractDecisionNode
 					if (response.getStatusLine().getStatusCode() == org.apache.http.HttpStatus.SC_OK)
 					{
 						ObjectMapper objectMapper = new ObjectMapper();
-						// ignore existing Person Metadata and BiometricMetadata
-						// properties which are not included in
-						// com.iwsinc.forgerock.Person class
 						objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 						person = objectMapper.readValue(jsonResponse, Person.class);
 
@@ -374,7 +365,6 @@ public class ValidateUser extends AbstractDecisionNode
 				debug.error("[" + DEBUG_FILE + "]: " + "Exception in {} validateUser: '{}'", Constants.IMAGEWARE_APPLICATION_NAME, exp);
 				throw exp;
 			}
-
 		}
 		catch (Exception exp)
 		{
@@ -490,6 +480,5 @@ public class ValidateUser extends AbstractDecisionNode
 		}
 
 		return token;
-
 	}
 }

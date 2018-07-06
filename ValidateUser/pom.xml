@@ -58,13 +58,6 @@
           <artifactId>UserManagerClient</artifactId>
           <version>1.0.0</version>
         </dependency>
-        <!-- 
-       <dependency>
-          <groupId>com.iwsinc</groupId>
-          <artifactId>ValidateUserCommon</artifactId>
-          <version>1.0.0</version>
-        </dependency>
-         -->
     </dependencies>
     
     <build>

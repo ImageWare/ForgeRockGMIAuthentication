@@ -91,130 +91,100 @@ public class ValidateUserDecision implements Node
 
 	private Boolean handleVerifyResponse(String verifyResponseUrl, String accessToken)
 	{
-		Boolean verifyComplete = null;
-		boolean messageComplete = false;
+		boolean verifyComplete = false;
 
-//		int iterateCount = expiresInSeconds / 3;
-//		for (int i = 0; i < iterateCount; i++)
-//		{
-//			try
-//			{
-//				Thread.sleep((long) (1000 * 2.5));
-//			}
-//			catch (InterruptedException e)
-//			{
-//				debug.error("[" + DEBUG_FILE + "]: " + "Exception in {} Thread.sleep: '{}'", Constants.IMAGEWARE_APPLICATION_NAME, e);
-//			}
+		CloseableHttpResponse response = null;
 
-			CloseableHttpResponse response = null;
+		try
+		{
+			HttpGet httpGet = new HttpGet(verifyResponseUrl);
+			httpGet.setHeader("Content-Type", "application/json");
+			httpGet.setHeader("Authorization", "Bearer " + accessToken);
+
+			CloseableHttpClient httpclient = HttpClients.createSystem();
 
 			try
 			{
-				HttpGet httpGet = new HttpGet(verifyResponseUrl);
-				httpGet.setHeader("Content-Type", "application/json");
-				httpGet.setHeader("Authorization", "Bearer " + accessToken);
 
-				CloseableHttpClient httpclient = HttpClients.createSystem();
-
-				try
+				debug.message("[" + DEBUG_FILE + "]: " + "processing verification...");
+				
+				response = httpclient.execute(httpGet);
+				if (response != null)
 				{
-
-					debug.message("[" + DEBUG_FILE + "]: " + "processing verification...");
+					// get entity from response
+					org.apache.http.HttpEntity entity = response.getEntity();
+					String jsonResponse = EntityUtils.toString(entity);
 					
-					response = httpclient.execute(httpGet);
-					if (response != null)
+					debug.message("[" + DEBUG_FILE + "]: " + "json from  GMI: '{}'", jsonResponse);
+
+					// investigate response for success/failure
+					if (response.getStatusLine().getStatusCode() == org.apache.http.HttpStatus.SC_OK)
 					{
-						// get entity from response
-						org.apache.http.HttpEntity entity = response.getEntity();
-						String jsonResponse = EntityUtils.toString(entity);
-						
-						debug.message("[" + DEBUG_FILE + "]: " + "json from  GMI: '{}'", jsonResponse);
+						ObjectMapper objectMapper = new ObjectMapper();
+						// ignore existing Person Metadata and
+						// BiometricMetadata properties which are not
+						// included in com.iwsinc.forgerock.Person class
+						objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+						List<MessageResponse> messageResponses = Arrays.asList(objectMapper.readValue(jsonResponse, MessageResponse[].class));
 
-						// investigate response for success/failure
-						if (response.getStatusLine().getStatusCode() == org.apache.http.HttpStatus.SC_OK)
+						for (MessageResponse messageResponse : messageResponses)
 						{
-							ObjectMapper objectMapper = new ObjectMapper();
-							// ignore existing Person Metadata and
-							// BiometricMetadata properties which are not
-							// included in com.iwsinc.forgerock.Person class
-							objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-							List<MessageResponse> messageResponses = Arrays.asList(objectMapper.readValue(jsonResponse, MessageResponse[].class));
-
-							for (MessageResponse messageResponse : messageResponses)
+							if (messageResponse.getTransactionType().equals("VERIFY") && messageResponse.getSucceeded())
 							{
-								if (messageResponse.getTransactionType().equals("VERIFY") && messageResponse.getSucceeded())
-								{
-									debug.message("[" + DEBUG_FILE + "]: " + "Verification successful");
-									verifyComplete = true;
-								}
-								else if (messageResponse.getTransactionType().equals("REJECT") && !messageResponse.getSucceeded() && messageResponse.getRejectionInfo().equals("User rejected alert."))
-								{
-									debug.message("[" + DEBUG_FILE + "]: " + "Verification was rejected");
-									verifyComplete = false;
-
-								}
-								else if (messageResponse.getTransactionType().equals("REJECT") && !messageResponse.getSucceeded())
-								{
-									debug.message("[" + DEBUG_FILE + "]: " + "Verification has failed or timed out");
-									verifyComplete = false;
-
-								}
+								debug.message("[" + DEBUG_FILE + "]: " + "Verification successful");
+								verifyComplete = true;
+							}
+							else if (messageResponse.getTransactionType().equals("REJECT") && !messageResponse.getSucceeded() && messageResponse.getRejectionInfo().equals("User rejected alert."))
+							{
+								debug.message("[" + DEBUG_FILE + "]: " + "Verification was rejected");
+								verifyComplete = false;
+							}
+							else if (messageResponse.getTransactionType().equals("REJECT") && !messageResponse.getSucceeded())
+							{
+								debug.message("[" + DEBUG_FILE + "]: " + "Verification has failed or timed out");
+								verifyComplete = false;
 							}
 						}
-						else
-						{
-							UserManagerCallFailedException e = new UserManagerCallFailedException();
-							String msg = String.format("Error in contacting UserManager. Status: %s", response.getStatusLine());
-							e.setMessageCode(msg);
-							throw e;
-						}
-
-						// and ensure it is fully consumed
-						EntityUtils.consume(entity);
 					}
 					else
 					{
-
+						UserManagerCallFailedException e = new UserManagerCallFailedException();
+						String msg = String.format("Error in contacting UserManager. Status: %s", response.getStatusLine());
+						e.setMessageCode(msg);
+						throw e;
 					}
 
+					// and ensure it is fully consumed
+					EntityUtils.consume(entity);
 				}
-				catch (Exception exp)
+				else
 				{
-					debug.error("[" + DEBUG_FILE + "]: " + "Exception in {} validateUser: '{}'", Constants.IMAGEWARE_APPLICATION_NAME, exp);
-					throw exp;
+					debug.error("[" + DEBUG_FILE + "]: " + "Error in {} handleVerifyResponse: Verification Response from GMI server was null", Constants.IMAGEWARE_APPLICATION_NAME);
 				}
-
 			}
-			catch (Exception ex)
+			catch (Exception exp)
 			{
-				debug.error("[" + DEBUG_FILE + "]: " + "Exception in {} validateUser: '{}'", Constants.IMAGEWARE_APPLICATION_NAME, ex);
-
+				debug.error("[" + DEBUG_FILE + "]: " + "Exception in {} handleVerifyResponse: '{}'", Constants.IMAGEWARE_APPLICATION_NAME, exp);
+				throw exp;
 			}
-			finally
+		}
+		catch (Exception ex)
+		{
+			debug.error("[" + DEBUG_FILE + "]: " + "Exception in {} handleVerifyResponse: '{}'", Constants.IMAGEWARE_APPLICATION_NAME, ex);
+		}
+		finally
+		{
+			if (response != null)
 			{
-				if (response != null)
+				try
 				{
-					try
-					{
-						response.close();
-					}
-					catch (Throwable t)
-					{
-					}
+					response.close();
+				}
+				catch (Throwable t)
+				{
 				}
 			}
-
-			if (verifyComplete != null)
-			{
-				messageComplete = true;
-//				break;
-			}
-//		}
-
-//		if (!messageComplete)
-//		{
-//			debug.message("[" + DEBUG_FILE + "]: " + "Verification has timed out");
-//		}
+		}
 
 		return verifyComplete;
 	}
@@ -225,20 +195,15 @@ public class ValidateUserDecision implements Node
      */
     public enum ValidateUserOutcome 
     {
-        /**
-         * Successful authentication.
-         */
+        // Successful authentication.
         TRUE,
-        /**
-         * Authentication failed.
-         */
+        // Authentication failed.
         FALSE,
-        /**
-         * The GMI/GVID message has not been received yet.
-         */
+        // The GMI/GVID message has not been received yet.
         UNANSWERED
     }
 
+    
     /**
      * Defines the possible outcomes from this Ldap node.
      */
@@ -254,6 +219,4 @@ public class ValidateUserDecision implements Node
                     new Outcome(ValidateUserOutcome.UNANSWERED.name(), "Unanswered" /*bundle.getString("lockedOutcome")*/));
         }
     }
-
-
 }
