@@ -65,13 +65,12 @@ public class ValidateUserDecision implements Node
 	{
 		debug.message("ValidateUserDecisionPolling started");
 
-    	Boolean verified = false;
     	String verifyResponseUrl = context.sharedState.get(Constants.IMAGEWARE_VERIFY_URL).asString();
     	String accessToken = context.sharedState.get(Constants.IMAGEWARE_OAUTH_BEARER_TOKEN).asString();
     	debug.error("[" + DEBUG_FILE + "]: " + "access token {}, verify response url {}.", accessToken, verifyResponseUrl);
     	//int expiresInSeconds = 120;
     	
-    	verified = handleVerifyResponse(verifyResponseUrl, accessToken);
+    	Boolean verified = handleVerifyResponse(verifyResponseUrl, accessToken);
     	if (verified == null)
     	{
         	return goTo(ValidateUserOutcome.UNANSWERED).build();
@@ -91,7 +90,7 @@ public class ValidateUserDecision implements Node
 
 	private Boolean handleVerifyResponse(String verifyResponseUrl, String accessToken)
 	{
-		boolean verifyComplete = false;
+		Boolean verifyComplete = null;
 
 		CloseableHttpResponse response = null;
 
