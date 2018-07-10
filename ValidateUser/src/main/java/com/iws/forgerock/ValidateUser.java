@@ -19,6 +19,9 @@ package com.iws.forgerock;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 
+
+import java.util.ResourceBundle;
+
 import javax.inject.Inject;
 
 import org.apache.commons.codec.binary.Base64;
@@ -55,6 +58,9 @@ import com.sun.identity.shared.debug.Debug;
 public class ValidateUser extends AbstractDecisionNode
 {
 
+	private static final String BUNDLE = "com/iws/forgerock/ValidateUser";
+    private ResourceBundle bundle;
+			
 	private final Config config;
 	private final CoreWrapper coreWrapper;
 	private final static String DEBUG_FILE = "ValidateUser";
@@ -94,19 +100,29 @@ public class ValidateUser extends AbstractDecisionNode
 		{
 			return "https://gmi-ha.iwsinc.com/gmiserver";
 		}
-		
 
 		@Attribute(order = 600)
 		default String gmiApplicationName()
 		{
 			return "GoVerifyID";
 		}
-		
 
 		@Attribute(order = 700)
 		default String gmiTemplateName()
 		{
 			return "GVID_VERIFY_CHOICE";
+		}
+
+		@Attribute(order = 800)
+		default String messageReason()
+		{
+			return "ForgeRock custom authentication test message";
+		}
+		
+		@Attribute(order = 900)
+		default int messageExpiresInSeconds()
+		{
+			return 120;
 		}
 	}
 
@@ -178,6 +194,8 @@ public class ValidateUser extends AbstractDecisionNode
 		String gmiServerURL = config.gmiServerURL();
 		String app = config.gmiApplicationName();
 		String template = config.gmiTemplateName();
+		String reasonText = config.messageReason();
+		int messageExpiresInSeconds = config.messageExpiresInSeconds();
 
 		userManagerURL += "/oauth/token?scope=ignored&grant_type=client_credentials";
 
@@ -190,8 +208,8 @@ public class ValidateUser extends AbstractDecisionNode
 			{
 				debug.message("[" + DEBUG_FILE + "]: " + "validateUser returning true and moving to next step");
 
-				String reason = "ForgeRock custom authentication";
-				int expiresIn = 120;
+				String reason = reasonText;
+				int expiresIn = messageExpiresInSeconds;
 				String templatePath = gmiServerURL + "/tenant/" + tenant + "/app/" + app + "/template/" + template;
 				String gmiMessageUrl = templatePath + "/person/" + person.getId() + "/message";
 

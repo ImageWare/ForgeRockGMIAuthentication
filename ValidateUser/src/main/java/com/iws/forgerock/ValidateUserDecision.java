@@ -2,6 +2,7 @@ package com.iws.forgerock;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.ResourceBundle;
 
 import javax.inject.Inject;
 
@@ -31,6 +32,8 @@ import com.sun.identity.shared.debug.Debug;
 public class ValidateUserDecision implements Node
 {
 
+	private static final String BUNDLE = "com/iws/forgerock/ValidateUserDecision";
+    
 	private final Config config;
 	private final CoreWrapper coreWrapper;
 	private final static String DEBUG_FILE = "ValidateUserDecision";
@@ -67,8 +70,6 @@ public class ValidateUserDecision implements Node
 
     	String verifyResponseUrl = context.sharedState.get(Constants.IMAGEWARE_VERIFY_URL).asString();
     	String accessToken = context.sharedState.get(Constants.IMAGEWARE_OAUTH_BEARER_TOKEN).asString();
-    	debug.error("[" + DEBUG_FILE + "]: " + "access token {}, verify response url {}.", accessToken, verifyResponseUrl);
-    	//int expiresInSeconds = 120;
     	
     	Boolean verified = handleVerifyResponse(verifyResponseUrl, accessToken);
     	if (verified == null)
@@ -83,9 +84,7 @@ public class ValidateUserDecision implements Node
         {
         	return goTo(ValidateUserOutcome.FALSE).build();
         }
-    	
 	}
-
 
 
 	private Boolean handleVerifyResponse(String verifyResponseUrl, String accessToken)
@@ -211,11 +210,11 @@ public class ValidateUserDecision implements Node
         @Override
         public List<Outcome> getOutcomes(PreferredLocales locales, JsonValue nodeAttributes) 
         {
-            //ResourceBundle bundle = locales.getBundleInPreferredLocale(ValidateUserDecision.BUNDLE, ValidateUserDecisionOutcomeProvider.class.getClassLoader());
+            ResourceBundle bundle = locales.getBundleInPreferredLocale(ValidateUserDecision.BUNDLE, ValidateUserDecisionOutcomeProvider.class.getClassLoader());
             return ImmutableList.of(
-                    new Outcome(ValidateUserOutcome.TRUE.name(), "True" /*bundle.getString("trueOutcome")*/),
-                    new Outcome(ValidateUserOutcome.FALSE.name(), "False" /*bundle.getString("falseOutcome")*/),
-                    new Outcome(ValidateUserOutcome.UNANSWERED.name(), "Unanswered" /*bundle.getString("lockedOutcome")*/));
+                    new Outcome(ValidateUserOutcome.TRUE.name(), bundle.getString("trueOutcome")),
+                    new Outcome(ValidateUserOutcome.FALSE.name(), bundle.getString("falseOutcome")),
+                    new Outcome(ValidateUserOutcome.UNANSWERED.name(), bundle.getString("unansweredOutcome")));
         }
     }
 }
