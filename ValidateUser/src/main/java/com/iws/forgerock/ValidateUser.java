@@ -122,7 +122,7 @@ public class ValidateUser extends AbstractDecisionNode
 		@Attribute(order = 900)
 		default int messageExpiresInSeconds()
 		{
-			return 120;
+			return 180;
 		}
 	}
 
