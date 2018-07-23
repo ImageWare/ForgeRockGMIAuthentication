@@ -50,7 +50,7 @@ Workflow example:
 ![ScreenShot](./images/workflow.png)
 
 Validate User settings example:
-![ScreenShot](./images/./images/validateuser_settings.png)
+![ScreenShot](./images/validateuser_settings.png)
 
 Sample login page:
 ![ScreenShot](./images/login.png)
