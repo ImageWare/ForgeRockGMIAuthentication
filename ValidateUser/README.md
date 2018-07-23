@@ -56,7 +56,7 @@ Sample login page:
 ![ScreenShot](./images/login.png)
 
 Sample waiting page:
-![ScreenShot](./images/workflow.png)
+![ScreenShot](./images/wait.png)
 
 Sample successful login to user profile:
 ![ScreenShot](./images/userprofile.png)
