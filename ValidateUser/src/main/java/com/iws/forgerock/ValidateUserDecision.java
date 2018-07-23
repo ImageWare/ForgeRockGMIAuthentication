@@ -25,7 +25,6 @@ import org.forgerock.util.i18n.PreferredLocales;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.assistedinject.Assisted;
-import com.iwsinc.usermanager.exception.UserManagerCallFailedException;
 import com.sun.identity.shared.debug.Debug;
 
 @Node.Metadata(outcomeProvider = ValidateUserDecision.ValidateUserDecisionOutcomeProvider.class, configClass = ValidateUserDecision.Config.class)
@@ -66,7 +65,7 @@ public class ValidateUserDecision implements Node
 	@Override
 	public Action process(TreeContext context) throws NodeProcessException
 	{
-		debug.message("ValidateUserDecisionPolling started");
+		debug.message("ValidateUserDecision started");
 
     	String verifyResponseUrl = context.sharedState.get(Constants.IMAGEWARE_VERIFY_URL).asString();
     	String accessToken = context.sharedState.get(Constants.IMAGEWARE_OAUTH_BEARER_TOKEN).asString();
@@ -113,7 +112,7 @@ public class ValidateUserDecision implements Node
 					org.apache.http.HttpEntity entity = response.getEntity();
 					String jsonResponse = EntityUtils.toString(entity);
 					
-					debug.message("[" + DEBUG_FILE + "]: " + "json from  GMI: '{}'", jsonResponse);
+					debug.message("[" + DEBUG_FILE + "]: " + "json from GMI: '{}'", jsonResponse);
 
 					// investigate response for success/failure
 					if (response.getStatusLine().getStatusCode() == org.apache.http.HttpStatus.SC_OK)
@@ -146,9 +145,8 @@ public class ValidateUserDecision implements Node
 					}
 					else
 					{
-						UserManagerCallFailedException e = new UserManagerCallFailedException();
-						String msg = String.format("Error in contacting UserManager. Status: %s", response.getStatusLine());
-						e.setMessageCode(msg);
+						String msg = String.format("Error in handleVerifyResponse contacting GMI Server. Status: %s", response.getStatusLine());
+						Exception e = new Exception(msg);
 						throw e;
 					}
 

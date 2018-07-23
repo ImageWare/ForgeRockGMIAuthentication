@@ -145,6 +145,8 @@ public class ValidateUser extends AbstractDecisionNode
 	public Action process(TreeContext context) throws NodeProcessException
 	{
 
+		debug.message("ValidateUser started");
+		
 		String emailAddress = "";
 		String username = context.sharedState.get(USERNAME).asString();
 
@@ -153,7 +155,7 @@ public class ValidateUser extends AbstractDecisionNode
 			debug.error("[" + DEBUG_FILE + "]: " + "Username not available.");
 			return goTo(false).build();
 		}
-		debug.error("[" + DEBUG_FILE + "]: " + "Username {}.", username);
+		debug.message("[" + DEBUG_FILE + "]: " + "Username {}.", username);
 
 		AMIdentity userIdentity = coreWrapper.getIdentity(username, context.sharedState.get(REALM).asString());
 		if (userIdentity == null)
@@ -168,7 +170,7 @@ public class ValidateUser extends AbstractDecisionNode
 			{
 				// getting primary (first) email address for user
 				emailAddress = userIdentity.getAttribute("mail").toArray()[0].toString();
-				debug.error("[" + DEBUG_FILE + "]: " + "Email Address {}.", emailAddress);
+				debug.message("[" + DEBUG_FILE + "]: " + "Email Address {}.", emailAddress);
 			}
 			else
 			{
@@ -359,7 +361,7 @@ public class ValidateUser extends AbstractDecisionNode
 						objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 						person = objectMapper.readValue(jsonResponse, Person.class);
 
-						debug.message("[" + DEBUG_FILE + "]: " + "json from  GMI: '{}'", jsonResponse);
+						debug.message("[" + DEBUG_FILE + "]: " + "json from GMI: '{}'", jsonResponse);
 					}
 					else
 					{
