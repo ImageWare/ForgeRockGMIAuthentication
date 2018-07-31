@@ -285,7 +285,7 @@ public class ValidateUser extends AbstractDecisionNode
 						
 						if (message == null || message.getMessageId() == null)
 						{
-							debug.error("[" + DEBUG_FILE + "]: " + "biometricVerifyUser cannot read GMI Message");
+							debug.error("[" + DEBUG_FILE + "]: " + "biometricVerifyUser cannot read GoVerifyID server Message");
 							return false;
 							
 						}
@@ -299,7 +299,7 @@ public class ValidateUser extends AbstractDecisionNode
 					}
 					else
 					{
-						debug.error("[" + DEBUG_FILE + "]: " + "GMI verification failed in {} error response: '{}: {}'", Constants.IMAGEWARE_APPLICATION_NAME, response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase());
+						debug.error("[" + DEBUG_FILE + "]: " + "GoVerifyID verification failed in {} error response: '{}: {}'", Constants.IMAGEWARE_APPLICATION_NAME, response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase());
 					}
 				}
 			}
