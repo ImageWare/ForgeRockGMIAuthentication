@@ -26,7 +26,7 @@
         <version>6.0.0</version>
     </parent>
 
-    <artifactId>ValidateUser</artifactId>
+    <artifactId>ImageWareAuthentication</artifactId>
 
     <groupId>com.iws</groupId>
     <version>1.0.0</version>    
@@ -61,7 +61,7 @@
     </dependencies>
     
     <build>
-		<finalName>ValidateUser-1.0.0</finalName>
+		<finalName>ImageWareAuthentication-1.0.0</finalName>
 		<plugins>
 
 		<!-- Maven Shade Plugin -->
