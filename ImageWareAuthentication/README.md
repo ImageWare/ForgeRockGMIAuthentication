@@ -13,7 +13,7 @@
  *
  * Copyright ${data.get('yyyy')} ForgeRock AS.
 -->
-# ImageAuthentication
+# ImageWareAuthentication
 
 A simple authentication node for ForgeRock's [Identity Platform][forgerock_platform] 5.5 and above. This node integrates with the ImageWare Biometric as a service platform, allowing users to verify identity via mobile device. An Tenant account with ImageWare Systems, Inc is required for usage.
 
