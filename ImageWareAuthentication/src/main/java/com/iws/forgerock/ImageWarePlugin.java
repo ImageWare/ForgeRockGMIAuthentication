@@ -68,7 +68,7 @@ public class ImageWarePlugin extends AbstractNodeAmPlugin {
      */
 	@Override
 	protected Map<String, Iterable<? extends Class<? extends Node>>> getNodesByVersion() {
-		return Collections.singletonMap(ValidateUserPlugin.currentVersion, 
+		return Collections.singletonMap(ImageWarePlugin.currentVersion, 
 				Arrays.asList(ImageWareInitiator.class, ImageWareDecision.class, ImageWareRegistration.class));
 	}
 
