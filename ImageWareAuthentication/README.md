@@ -13,7 +13,7 @@
  *
  * Copyright ${data.get('yyyy')} ForgeRock AS.
 -->
-# ValidateUser
+# ImageAuthentication
 
 A simple authentication node for ForgeRock's [Identity Platform][forgerock_platform] 5.5 and above. This node integrates with the ImageWare Biometric as a service platform, allowing users to verify identity via mobile device. An Tenant account with ImageWare Systems, Inc is required for usage.
 
@@ -21,17 +21,17 @@ A simple authentication node for ForgeRock's [Identity Platform][forgerock_platf
 Copy the .jar file from the ../target directory into the ../web-container/webapps/openam/WEB-INF/lib directory where AM is deployed.  Restart the web container to pick up the new node.  The node will then appear in the authentication trees components palette.
 
 
-The Validate User and Validate User Decision nodes are meant to be used in a workflow with a Username Collector, Polling Wait Node and Retry Limit Decision node. See screenshots below for workflow layout.
+The ImageWare Initiator and ImageWare Decision nodes are meant to be used in a workflow with a Username Collector, Polling Wait Node and Retry Limit Decision node. See screenshots below for workflow layout.
 
 The Username Collector node collects the user’s login name.
-The Validate User node 
+The ImageWare Initiator node 
    * Looks up the user’s email address in the local LDAP user store or fails in error if the user’s email cannot be found.
    * Retrieves an OAuth token from ImageWare’s User Manager or fails in error
    * Verifies the user belongs to the associated Tenant name or fails in error
    * Sends a biometric verification message to the user’s mobile device or fails in error
-The Polling Wait Node controls the time delay before the Validate User Decision node looks for the authentication response.
-The Retry Limit Decision node controls how many times the Validate User Decision node will try to process an authentication response.
-The Validate User Decision node
+The Polling Wait Node controls the time delay before the ImageWare Decision node looks for the authentication response.
+The Retry Limit Decision node controls how many times the ImageWare Decision node will try to process an authentication response.
+The ImageWare Decision node
    * Looks for an authentication response to the original verification call and passes control back to the Retry Limit Decision node if none is found
    * Verifies the biometric authentication for the user and returns status of pass or fail
 
@@ -49,7 +49,7 @@ Add ImageWares' public git repo to your maven environment.
 Workflow example:
 ![ScreenShot](./images/workflow.png)
 
-Validate User settings example:
+ImageWare Initiator settings example:
 ![ScreenShot](./images/validateuser_settings.png)
 
 Sample login page:
