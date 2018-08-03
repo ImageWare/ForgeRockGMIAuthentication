@@ -70,7 +70,7 @@ public class ValidateUserPlugin extends AbstractNodeAmPlugin {
 	protected Map<String, Iterable<? extends Class<? extends Node>>> getNodesByVersion() {
 		return Collections.singletonMap(ValidateUserPlugin.currentVersion, 
 				//Collections.singletonList(ValidateUser.class));
-				Arrays.asList(ValidateUser.class, ValidateUserDecision.class));
+				Arrays.asList(ValidateUser.class, ValidateUserDecision.class, ImageWareRegistration.class));
 	}
 
     /** 
