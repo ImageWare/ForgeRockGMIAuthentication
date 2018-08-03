@@ -8,12 +8,12 @@
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.iws</groupId>
-  <artifactId>ValidateUser</artifactId>
+  <artifactId>ImageWareAuthentication</artifactId>
   <name>Template for an Auth Tree Node maven project</name>
   <version>1.0.0</version>
   <description>An Authentication Tree Node for ForgeRock's Identity Platform</description>
   <build>
-    <finalName>ValidateUser-1.0.0</finalName>
+    <finalName>ImageWareAuthentication-1.0.0</finalName>
     <plugins>
       <plugin>
         <artifactId>maven-shade-plugin</artifactId>

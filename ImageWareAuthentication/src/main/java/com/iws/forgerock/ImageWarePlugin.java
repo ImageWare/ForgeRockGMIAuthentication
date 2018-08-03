@@ -56,7 +56,7 @@ import org.forgerock.openam.plugins.PluginException;
  * @supported.all.api
  * @since AM 5.5.0
  */
-public class ValidateUserPlugin extends AbstractNodeAmPlugin {
+public class ImageWarePlugin extends AbstractNodeAmPlugin {
 
 	static private String currentVersion = "1.0.0";
 	
@@ -69,8 +69,7 @@ public class ValidateUserPlugin extends AbstractNodeAmPlugin {
 	@Override
 	protected Map<String, Iterable<? extends Class<? extends Node>>> getNodesByVersion() {
 		return Collections.singletonMap(ValidateUserPlugin.currentVersion, 
-				//Collections.singletonList(ValidateUser.class));
-				Arrays.asList(ValidateUser.class, ValidateUserDecision.class, ImageWareRegistration.class));
+				Arrays.asList(ImageWareInitiator.class, ImageWareDecision.class, ImageWareRegistration.class));
 	}
 
     /** 
@@ -118,6 +117,6 @@ public class ValidateUserPlugin extends AbstractNodeAmPlugin {
      */
 	@Override
 	public String getPluginVersion() {
-		return ValidateUserPlugin.currentVersion;
+		return ImageWarePlugin.currentVersion;
 	}
 }
