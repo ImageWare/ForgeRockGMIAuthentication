@@ -173,6 +173,7 @@ public class ImageWareRegistration extends AbstractDecisionNode
 		// Need both username and email from user interface or LDAP record
 		
 
+		// Step 1: validate the user/email address
 		String emailAddress = null;
 
 		try
@@ -180,7 +181,7 @@ public class ImageWareRegistration extends AbstractDecisionNode
 			validateConfiguration();
 			
 			String username = context.sharedState.get(USERNAME).asString();
-			debug.message("[" + DEBUG_FILE + "]: " + "Username {}.", username);
+			debug.message("Username {}.", username);
 	
 			AMIdentity userIdentity = getAmIdentity(context, username);
 			emailAddress = getUserEmail(userIdentity);
@@ -213,11 +214,11 @@ public class ImageWareRegistration extends AbstractDecisionNode
 		setUserManagerURL(config.userManagerURL() + "/oauth/token?scope=ignored&grant_type=client_credentials");
 		
 
-		// Step 1: authorize oauth client
+		// Step 2: authorize oauth client
 		OauthBearerToken token = getOauthToken(clientName, clientSecret);
 		setBearerToken(token);
 		
-		// Step 2: add GMI person 
+		// Step 3: add GMI person 
 		try
 		{
 			addUserAsPersonToGmi(emailAddress, tenant);
@@ -239,7 +240,7 @@ public class ImageWareRegistration extends AbstractDecisionNode
 			}
 		}
 				
-		// Step 3: user needs to download GoVerifyID app and register with email address
+		// Step 4: user needs to download GoVerifyID app and register with email address
 		//	upon success, user will get a registration email
 		//	after completing the registration step, the user will receive an Enroll Message on their mobile device
 			
@@ -377,7 +378,7 @@ public class ImageWareRegistration extends AbstractDecisionNode
 						objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 						application = objectMapper.readValue(jsonResponse, Application.class);
 
-						debug.message("[" + DEBUG_FILE + "]: " + "json from GMI server: '{}'", jsonResponse);
+						debug.message("json from GMI server: '{}'", jsonResponse);
 					}
 					else
 					{
@@ -392,13 +393,13 @@ public class ImageWareRegistration extends AbstractDecisionNode
 				}
 				else
 				{
-					debug.error("[" + DEBUG_FILE + "]: " + "Error. No response from {}", ImageWareCommon.IMAGEWARE_APPLICATION_NAME);
+					debug.error("Error. No response from {}", ImageWareCommon.IMAGEWARE_APPLICATION_NAME);
 				}
 
 			}
 			catch (Exception exp)
 			{
-				debug.error("[" + DEBUG_FILE + "]: " + "Exception in {} getTenantApplication: '{}'", ImageWareCommon.IMAGEWARE_APPLICATION_NAME, exp.getMessage());
+				debug.error("Exception in {} getTenantApplication: '{}'", ImageWareCommon.IMAGEWARE_APPLICATION_NAME, exp.getMessage());
 				throw exp;
 			}
 		}
@@ -463,7 +464,7 @@ public class ImageWareRegistration extends AbstractDecisionNode
 					// investigate response for success/failure
 					if (response.getStatusLine().getStatusCode() == org.apache.http.HttpStatus.SC_CONFLICT)
 					{
-						debug.error("Error in {}. User with email address {} already exists in tenant {}", ImageWareCommon.IMAGEWARE_APPLICATION_NAME, emailAddress, tenant);
+						debug.error("Error in {}. User with email address '{}' already exists in tenant '{}'", ImageWareCommon.IMAGEWARE_APPLICATION_NAME, emailAddress, tenant);
 						setCurrentErrorMessage(String.format("User with email address '%s' already exists for tenant '%s'", emailAddress, tenant));
 					}
 					else if (response.getStatusLine().getStatusCode() == org.apache.http.HttpStatus.SC_CREATED)
@@ -482,7 +483,7 @@ public class ImageWareRegistration extends AbstractDecisionNode
 			}
 			catch (Exception exp)
 			{
-				debug.error("[" + DEBUG_FILE + "]: " + "Exception in {} addUserAsPersonToGmi: '{}'", ImageWareCommon.IMAGEWARE_APPLICATION_NAME, exp);
+				debug.error("Exception in {} addUserAsPersonToGmi: '{}'", ImageWareCommon.IMAGEWARE_APPLICATION_NAME, exp);
 				throw exp;
 			}
 		}
@@ -511,7 +512,7 @@ public class ImageWareRegistration extends AbstractDecisionNode
 			response =  HttpClients.createSystem().execute(httpGet);
 		}
 		catch (Exception e) {
-			debug.error("Exception in getBearerToken: '{}'", e);
+			debug.error("Exception in getOauthToken: '{}'", e);
 			throw new NodeProcessException(e);
 		}
 

@@ -381,7 +381,7 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 			response =  HttpClients.createSystem().execute(httpGet);
 		}
 		catch (Exception e) {
-			debug.error("Exception in getBearerToken: '{}'", e);
+			debug.error("Exception in getOauthToken: '{}'", e);
 			throw new NodeProcessException(e);
 		}
 
