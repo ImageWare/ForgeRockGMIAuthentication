@@ -22,7 +22,7 @@
  *
  */
 
-package com.iws.forgerock;
+package com.iws.forgerock.gmi.entity;
 
 import javax.validation.constraints.Pattern;
 

@@ -25,8 +25,12 @@ import org.forgerock.util.i18n.PreferredLocales;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.iws.forgerock.gmi.entity.MessageResponse;
 import com.sun.identity.shared.debug.Debug;
 
+/**
+ * A node that processes the result of an ImageWare biometric verification message for ForgeRock authentication
+ */
 @Node.Metadata(outcomeProvider = ImageWareDecision.ImageWareDecisionOutcomeProvider.class, configClass =
 		ImageWareDecision.Config.class)
 public class ImageWareDecision implements Node {
@@ -56,8 +60,8 @@ public class ImageWareDecision implements Node {
 	public Action process(TreeContext context) throws NodeProcessException {
 		debug.message("ImageWareDecision started");
     	
-    	Boolean verified = handleVerifyResponse(context.sharedState.get(Constants.IMAGEWARE_VERIFY_URL).asString(),
-				context.sharedState.get(Constants.IMAGEWARE_OAUTH_BEARER_TOKEN).asString());
+    	Boolean verified = handleVerifyResponse(context.sharedState.get(ImageWareCommon.IMAGEWARE_VERIFY_URL).asString(),
+				context.sharedState.get(ImageWareCommon.IMAGEWARE_OAUTH_BEARER_TOKEN).asString());
     	if (verified == null) {
         	return goTo(ImageWareDecisionOutcome.UNANSWERED).build();
     	}
@@ -89,7 +93,7 @@ public class ImageWareDecision implements Node {
 
 		if (response == null) {
 			String msg = String.format("Error in %s handleVerifyResponse: Verification Response from GMI " +
-							"server was null", Constants.IMAGEWARE_APPLICATION_NAME);
+							"server was null", ImageWareCommon.IMAGEWARE_APPLICATION_NAME);
 			debug.error(msg);
 			throw new NodeProcessException(msg);
 		}

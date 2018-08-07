@@ -16,15 +16,18 @@
 
 package com.iws.forgerock;
 
-import static com.iws.forgerock.Constants.MAIL_ATTRIBUTE;
+import static com.iws.forgerock.ImageWareCommon.MAIL_ATTRIBUTE;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 
 import com.sun.identity.sm.RequiredValueValidator;
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.List;
 
 import javax.inject.Inject;
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.TextOutputCallback;
 
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang.StringUtils;
@@ -37,6 +40,7 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
+import org.forgerock.guava.common.collect.ImmutableList;
 import org.forgerock.openam.annotations.sm.Attribute;
 import org.forgerock.openam.auth.node.api.*;
 import org.forgerock.openam.core.CoreWrapper;
@@ -45,6 +49,8 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.assistedinject.Assisted;
 import com.iplanet.sso.SSOException;
+import com.iws.forgerock.gmi.entity.Message;
+import com.iws.forgerock.gmi.entity.Person;
 import com.iwsinc.usermanager.client.OauthBearerToken;
 import com.iwsinc.usermanager.exception.UserManagerCallFailedException;
 import com.sun.identity.idm.AMIdentity;
@@ -53,7 +59,7 @@ import com.sun.identity.shared.debug.Debug;
 
 /**
  * A node that verifies a user account exists in the ImageWare GoVerifyID user
- * repository
+ * repository and sends a biometric verification message for ForgeRock authentication
  */
 @Node.Metadata(outcomeProvider = SingleOutcomeNode.OutcomeProvider.class, configClass = ImageWareInitiator.Config.class)
 public class ImageWareInitiator extends SingleOutcomeNode {
@@ -61,12 +67,33 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 	private final CoreWrapper coreWrapper;
 	private final static String DEBUG_FILE = "ImageWareInitiator";
 	private Debug debug = Debug.getInstance(DEBUG_FILE);
+	private String userManagerURL;
+	private String currentErrorMessage;
 
+	private String getUserManagerURL()
+	{
+		return userManagerURL;
+	}
+
+	private void setUserManagerURL(String userManagerUrl)
+	{
+		this.userManagerURL = userManagerUrl;
+	}
+	
+	private void setCurrentErrorMessage(String currentErrorMessage)
+	{
+		this.currentErrorMessage = currentErrorMessage;
+	}
+	
+	private String getCurrentErrorMessage()
+	{
+		return currentErrorMessage;
+	}
 	/**
 	 * Configuration for the node.
 	 */
 	public interface Config {
-		@Attribute(order = 100)
+		@Attribute(order = 100,  validators = {RequiredValueValidator.class})
 		default String tenantName() { return ""; }
 
 		@Attribute(order = 200,  validators = {RequiredValueValidator.class})
@@ -75,22 +102,22 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 		@Attribute(order = 300, validators = {RequiredValueValidator.class})
 		default String clientSecret() { return ""; }
 
-		@Attribute(order = 400)
+		@Attribute(order = 400,  validators = {RequiredValueValidator.class})
 		default String userManagerURL() { return "https://gmi-ha.iwsinc.com/usermanager"; }
 
-		@Attribute(order = 500)
+		@Attribute(order = 500,  validators = {RequiredValueValidator.class})
 		default String gmiServerURL() { return "https://gmi-ha.iwsinc.com/gmiserver"; }
 
-		@Attribute(order = 600)
+		@Attribute(order = 600,  validators = {RequiredValueValidator.class})
 		default String gmiApplicationName() { return "GoVerifyID"; }
 
-		@Attribute(order = 700)
+		@Attribute(order = 700,  validators = {RequiredValueValidator.class})
 		default String gmiTemplateName() { return "GVID_VERIFY_CHOICE"; }
 
-		@Attribute(order = 800)
+		@Attribute(order = 800,  validators = {RequiredValueValidator.class})
 		default String messageReason() { return "ForgeRock custom authentication test message"; }
 		
-		@Attribute(order = 900)
+		@Attribute(order = 900,  validators = {RequiredValueValidator.class})
 		default int messageExpiresInSeconds() { return 180; }
 	}
 
@@ -113,15 +140,40 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 
 		debug.message("ImageWareInitiator started");
 		
-		String username = context.sharedState.get(USERNAME).asString();
-		debug.message("Username {}.", username);
+		String emailAddress = null;
+		
+		try
+		{
+			validateConfiguration();
 
-		AMIdentity userIdentity = getAmIdentity(context, username);
+			String username = context.sharedState.get(USERNAME).asString();
+			debug.message("Username {}.", username);
 
-		String emailAddress = getUserEmail(userIdentity);
-		debug.message("Email Address {}.", emailAddress);
+			AMIdentity userIdentity = getAmIdentity(context, username);
 
-		OauthBearerToken token = getOauthToken(config.clientName(), config.clientSecret(), config.userManagerURL());
+			emailAddress = getUserEmail(userIdentity);
+			debug.message("Email Address {}.", emailAddress);
+			
+		}
+		catch (NodeProcessException ex)
+		{
+			if (getCurrentErrorMessage() != null)
+			{
+				Action.ActionBuilder authenticateResult = goToNext();
+				final List<Callback> callbacks = (List<Callback>) ImmutableList.of((Callback) new TextOutputCallback(0, getCurrentErrorMessage()));
+				authenticateResult = Action.send(callbacks);
+				// TODO send javascript to remove log in button
+				
+				return authenticateResult.build();
+			}
+			else
+			{
+				throw ex;
+			}
+		}
+
+		setUserManagerURL(config.userManagerURL() + "/oauth/token?scope=ignored&grant_type=client_credentials");
+		OauthBearerToken token = getOauthToken(config.clientName(), config.clientSecret());
 
 		String tenant = config.tenantName();
 		String gmiServerURL = config.gmiServerURL();
@@ -142,10 +194,47 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 		debug.message("biometricVerifyUser returning and completing authentication");
 		
 		return goToNext().replaceSharedState(context.sharedState.copy().
-				put(Constants.IMAGEWARE_OAUTH_BEARER_TOKEN, token.getAccessToken())).
+				put(ImageWareCommon.IMAGEWARE_OAUTH_BEARER_TOKEN, token.getAccessToken())).
 				build();
 	}
 
+
+
+	private void validateConfiguration() throws NodeProcessException
+	{
+		
+		if (StringUtils.isEmpty(config.tenantName())) 
+		{ 
+			setCurrentErrorMessage("Tenant Name is empty in node configuration");
+			throw new NodeProcessException(getCurrentErrorMessage());
+		}
+		
+		if (StringUtils.isEmpty(config.gmiApplicationName())) 
+		{ 
+			setCurrentErrorMessage("Application Name is empty in node configuration");
+			throw new NodeProcessException(getCurrentErrorMessage());
+		}
+
+		if (StringUtils.isEmpty(config.clientName())) 
+		{ 
+			setCurrentErrorMessage("OAuth Client Name is empty in node configuration");
+			throw new NodeProcessException(getCurrentErrorMessage());
+		}
+
+		if (StringUtils.isEmpty(config.clientSecret())) 
+		{ 
+			setCurrentErrorMessage("OAuth Client Secret is empty in node configuration");
+			throw new NodeProcessException(getCurrentErrorMessage());
+		}
+
+		if (StringUtils.isEmpty(config.gmiTemplateName())) 
+		{ 
+			setCurrentErrorMessage("Template Name is empty in node configuration");
+			throw new NodeProcessException(getCurrentErrorMessage());
+		}
+	}
+
+	
 	private String getUserEmail(AMIdentity userIdentity) throws NodeProcessException {
 		Iterator<String> emailAddressIterator;
 		try {
@@ -159,6 +248,7 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 		if (!emailAddressIterator.hasNext()) {
 			String errorMessage = String.format("User: '%s' has no email address in profile.", userIdentity.getName());
 			debug.error(errorMessage);
+			setCurrentErrorMessage(errorMessage);
 			throw new NodeProcessException(errorMessage);
 		}
 		// getting primary (first) email address for user
@@ -168,10 +258,11 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 	private AMIdentity getAmIdentity(TreeContext context, String username) throws NodeProcessException {
 		String errorMessage;
 
-		if (!StringUtils.isNotEmpty(username))
+		if (StringUtils.isEmpty(username))
 		{
 			errorMessage = "Username not available.";
 			debug.error(errorMessage);
+			setCurrentErrorMessage(errorMessage);
 			throw new NodeProcessException(errorMessage);
 		}
 
@@ -180,6 +271,7 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 		if (userIdentity == null) {
 			errorMessage = String.format("User: '%s' does not exist.", username);
 			debug.error(errorMessage);
+			setCurrentErrorMessage(errorMessage);
 			throw new NodeProcessException(errorMessage);
 		}
 		return userIdentity;
@@ -206,7 +298,7 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 		StatusLine statusLine = response.getStatusLine();
 
 		if (statusLine.getStatusCode() != HttpStatus.SC_CREATED) {
-			String msg = String.format("GMI verification failed in %s error response: '%s: %s'", Constants
+			String msg = String.format("GMI verification failed in %s error response: '%s: %s'", ImageWareCommon
 					.IMAGEWARE_APPLICATION_NAME, statusLine.getStatusCode(), statusLine.getReasonPhrase());
 			debug.error(msg);
 			throw new NodeProcessException(msg);
@@ -225,7 +317,7 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 		}
 
 		// share verification response url in state for retrieval later
-		context.sharedState.put(Constants.IMAGEWARE_VERIFY_URL, String.format(gmiVerifyUrlTemp, message.getMessageId()));
+		context.sharedState.put(ImageWareCommon.IMAGEWARE_VERIFY_URL, String.format(gmiVerifyUrlTemp, message.getMessageId()));
 		debug.message("biometricVerifyUser returning true for sending message and moving to next step");
 	}
 
@@ -248,7 +340,7 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 		}
 
 		if (response == null) {
-			throw new NodeProcessException(String.format("Error. No response from %s", Constants
+			throw new NodeProcessException(String.format("Error. No response from %s", ImageWareCommon
 					.IMAGEWARE_APPLICATION_NAME));
 		}
 		// get entity from response
@@ -274,12 +366,13 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 		return person;
 	}
 
-	private OauthBearerToken getOauthToken(String clientName, String clientSecret, String userManagerURL) throws
+	private OauthBearerToken getOauthToken(String clientName, String clientSecret) throws
 			NodeProcessException {
 
+		String userManagerURL = getUserManagerURL();
 		CloseableHttpResponse response;
 
-		HttpGet httpGet = new HttpGet(userManagerURL + "/oauth/token?scope=ignored&grant_type=client_credentials");
+		HttpGet httpGet = new HttpGet(userManagerURL);
 		httpGet.setHeader("Content-Type", "application/x-www-form-urlencoded");
 		httpGet.setHeader("Authorization", "Basic " + new String(Base64.encodeBase64((clientName + ":" +
 				clientSecret).getBytes())));

@@ -1,4 +1,4 @@
-package com.iws.forgerock;
+package com.iws.forgerock.gmi.entity;
 
 import javax.validation.constraints.Pattern;
 import javax.xml.bind.annotation.XmlRootElement;

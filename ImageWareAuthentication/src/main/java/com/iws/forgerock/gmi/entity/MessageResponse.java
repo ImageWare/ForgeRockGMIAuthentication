@@ -1,4 +1,4 @@
-package com.iws.forgerock;
+package com.iws.forgerock.gmi.entity;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
