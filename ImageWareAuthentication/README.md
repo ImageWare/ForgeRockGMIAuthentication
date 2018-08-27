@@ -23,6 +23,7 @@ Copy the .jar file from the ../target directory into the ../web-container/webapp
 The ImageWare Initiator and ImageWare Decision nodes are meant to be used in a workflow with a Username Collector, Polling Wait Node and Retry Limit Decision node. See screenshots below for workflow layout.
 
 The Username Collector node collects the user’s login name.
+
 The ImageWare Initiator node 
    * Looks up the user’s email address in the local LDAP user store or fails in error if the user’s email cannot be found.
    * Retrieves an OAuth token from ImageWare’s User Manager or fails in error
