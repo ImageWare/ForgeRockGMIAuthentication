@@ -33,36 +33,6 @@ public class TokenService
  	private OauthBearerToken bearerToken = null;
  	private long tokenExpiresAt;
  	private static String clientName, clientSecret, userManagerURL;
- 	
-    public static String getClientName()
-	{
-		return clientName;
-	}
-
-	public static void setClientName(String name)
-	{
-		clientName = name;
-	}
-
-	public static String getClientSecret()
-	{
-		return clientSecret;
-	}
-
-	public static void setClientSecret(String secret)
-	{
-		clientSecret = secret;
-	}
-
-	public static String getUserManagerURL()
-	{
-		return userManagerURL;
-	}
-
-	public static void setUserManagerURL(String url)
-	{
-		userManagerURL = url;
-	}
 
 	public OauthBearerToken getBearerToken() throws NodeProcessException
  	{
