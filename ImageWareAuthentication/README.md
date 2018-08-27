@@ -20,16 +20,6 @@ A simple authentication node for ForgeRock's [Identity Platform][forgerock_platf
 
 Copy the .jar file from the ../target directory into the ../web-container/webapps/openam/WEB-INF/lib directory where AM is deployed.  Restart the web container to pick up the new node.  The node will then appear in the authentication trees components palette.
 
-The ImageWare Registration node provides support for adding a new user of the GoVerifyID application to the GoVerifyID server. The user must already exist in the ForgeRock LDAP user store that is configured for the environment.
-
-The Username Collector node collects the user’s login name.
-The ImageWare Registration node 
-   * Looks up the user’s email address in the local LDAP user store or fails in error if the user’s email cannot be found.
-   * Retrieves an OAuth token from ImageWare’s User Manager or fails in error
-   * Adds the user as a ‘Person’ to the GoVerifyID backend or fails in error
-   * Reports back the next step needed to complete registration to the ForgeRock user interface
-
-
 The ImageWare Initiator and ImageWare Decision nodes are meant to be used in a workflow with a Username Collector, Polling Wait Node and Retry Limit Decision node. See screenshots below for workflow layout.
 
 The Username Collector node collects the user’s login name.
@@ -54,9 +44,6 @@ Add ImageWares' public git repo to your maven environment.
 > mvn package
 
 **SCREENSHOTS ARE GOOD LIKE BELOW**
-
-Registration Workflow example:
-![ScreenShot](./images/registration_workflow.png)
 
 Authentication Workflow example:
 ![ScreenShot](./images/workflow.png)

@@ -25,6 +25,7 @@ import org.forgerock.util.i18n.PreferredLocales;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.iws.forgerock.ImageWareCommon.UnauthorizedException;
 import com.iws.forgerock.gmi.entity.MessageResponse;
 import com.sun.identity.shared.debug.Debug;
 
@@ -39,6 +40,8 @@ public class ImageWareDecision implements Node {
 
 	private final static String DEBUG_FILE = "ImageWareDecision";
 	private Debug debug = Debug.getInstance(DEBUG_FILE);
+	private TokenService tokenService = null;
+
 
 	/**
 	 * Configuration for the node.
@@ -60,9 +63,33 @@ public class ImageWareDecision implements Node {
 	public Action process(TreeContext context) throws NodeProcessException {
 		debug.message("ImageWareDecision started");
     	
-    	Boolean verified = handleVerifyResponse(context.sharedState.get(ImageWareCommon.IMAGEWARE_VERIFY_URL).asString(),
-				context.sharedState.get(ImageWareCommon.IMAGEWARE_OAUTH_BEARER_TOKEN).asString());
-    	if (verified == null) {
+		Boolean verified = null;
+		tokenService = TokenService.getInstance();
+		
+		try
+		{
+		
+	    	verified = handleVerifyResponse(context.sharedState.get(ImageWareCommon.IMAGEWARE_VERIFY_URL).asString(),
+					context.sharedState.get(ImageWareCommon.IMAGEWARE_OAUTH_BEARER_TOKEN).asString());
+		}
+		catch (UnauthorizedException ue)
+		{
+			tokenService.setBearerToken(null);
+			
+			try
+			{
+				verified = handleVerifyResponse(context.sharedState.get(ImageWareCommon.IMAGEWARE_VERIFY_URL).asString(),
+						context.sharedState.get(ImageWareCommon.IMAGEWARE_OAUTH_BEARER_TOKEN).asString());
+			}
+			catch (UnauthorizedException e)
+			{
+				debug.error("Cannot successfully use new UserManager OAuth token.");
+				throw new NodeProcessException(e);
+			}
+			
+		}
+		
+		if (verified == null) {
         	return goTo(ImageWareDecisionOutcome.UNANSWERED).build();
     	}
     	else if (verified) {
@@ -74,7 +101,7 @@ public class ImageWareDecision implements Node {
 	}
 
 
-	private Boolean handleVerifyResponse(String verifyResponseUrl, String accessToken) throws NodeProcessException {
+	private Boolean handleVerifyResponse(String verifyResponseUrl, String accessToken) throws NodeProcessException, UnauthorizedException {
 		Boolean verifyComplete = null;
 
 		CloseableHttpResponse response;
@@ -102,7 +129,11 @@ public class ImageWareDecision implements Node {
 
 
 		// investigate response for success/failure
-		if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
+		if (response.getStatusLine().getStatusCode() == HttpStatus.SC_UNAUTHORIZED) {
+			throw ImageWareCommon.getUnauthorizedException(String.format("Unauthorized acccess. May need a new OAuth token",
+					response.getStatusLine()));
+		}			
+		else if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
 			throw new NodeProcessException(String.format("Error in handleVerifyResponse contacting GMI " +
 					"Server. Status: %s", response.getStatusLine()));
 		}

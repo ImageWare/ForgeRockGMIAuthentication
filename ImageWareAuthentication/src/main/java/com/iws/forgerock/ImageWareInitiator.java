@@ -20,7 +20,6 @@ import static com.iws.forgerock.ImageWareCommon.MAIL_ATTRIBUTE;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 
-import com.sun.identity.sm.RequiredValueValidator;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
@@ -29,7 +28,6 @@ import javax.inject.Inject;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.TextOutputCallback;
 
-import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang.StringUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpStatus;
@@ -42,20 +40,25 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.forgerock.guava.common.collect.ImmutableList;
 import org.forgerock.openam.annotations.sm.Attribute;
-import org.forgerock.openam.auth.node.api.*;
+import org.forgerock.openam.auth.node.api.Action;
+import org.forgerock.openam.auth.node.api.Node;
+import org.forgerock.openam.auth.node.api.NodeProcessException;
+import org.forgerock.openam.auth.node.api.SingleOutcomeNode;
+import org.forgerock.openam.auth.node.api.TreeContext;
 import org.forgerock.openam.core.CoreWrapper;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.assistedinject.Assisted;
 import com.iplanet.sso.SSOException;
+import com.iws.forgerock.ImageWareCommon.UnauthorizedException;
 import com.iws.forgerock.gmi.entity.Message;
 import com.iws.forgerock.gmi.entity.Person;
 import com.iwsinc.usermanager.client.OauthBearerToken;
-import com.iwsinc.usermanager.exception.UserManagerCallFailedException;
 import com.sun.identity.idm.AMIdentity;
 import com.sun.identity.idm.IdRepoException;
 import com.sun.identity.shared.debug.Debug;
+import com.sun.identity.sm.RequiredValueValidator;
 
 /**
  * A node that verifies a user account exists in the ImageWare GoVerifyID user
@@ -67,18 +70,19 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 	private final CoreWrapper coreWrapper;
 	private final static String DEBUG_FILE = "ImageWareInitiator";
 	private Debug debug = Debug.getInstance(DEBUG_FILE);
-	private String userManagerURL;
+//	private String userManagerURL;
 	private String currentErrorMessage;
+	private TokenService tokenService = null;
 
-	private String getUserManagerURL()
-	{
-		return userManagerURL;
-	}
+//	private String getUserManagerURL()
+//	{
+//		return userManagerURL;
+//	}
 
-	private void setUserManagerURL(String userManagerUrl)
-	{
-		this.userManagerURL = userManagerUrl;
-	}
+//	private void setUserManagerURL(String userManagerUrl)
+//	{
+//		this.userManagerURL = userManagerUrl;
+//	}
 	
 	private void setCurrentErrorMessage(String currentErrorMessage)
 	{
@@ -89,6 +93,10 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 	{
 		return currentErrorMessage;
 	}
+	
+	
+
+
 	/**
 	 * Configuration for the node.
 	 */
@@ -172,13 +180,40 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 			}
 		}
 
-		setUserManagerURL(config.userManagerURL() + "/oauth/token?scope=ignored&grant_type=client_credentials");
-		OauthBearerToken token = getOauthToken(config.clientName(), config.clientSecret());
-
+//		setUserManagerURL(config.userManagerURL() + "/oauth/token?scope=ignored&grant_type=client_credentials");
+		
+		TokenService.setConfig(config);
+//		TokenService.setClientName(config.clientName());
+//		TokenService.setClientSecret(config.clientSecret());
+//		TokenService.setUserManagerURL(getUserManagerURL());
+		
+		tokenService = TokenService.getInstance();
+		
 		String tenant = config.tenantName();
 		String gmiServerURL = config.gmiServerURL();
+		Person person = null;
 
-		Person person = validateUser(emailAddress, token, gmiServerURL);
+		try
+		{
+			person = validateUser(emailAddress, tokenService.getBearerToken(), gmiServerURL);
+		
+		}
+		catch (UnauthorizedException ue)
+		{
+			tokenService.setBearerToken(null);
+			
+			try
+			{
+				person = validateUser(emailAddress, tokenService.getBearerToken(), gmiServerURL);
+			}
+			catch (UnauthorizedException e)
+			{
+				debug.error("Cannot successfully use new UserManager OAuth token.");
+				throw new NodeProcessException(e);
+			}
+			
+		}
+		
 		debug.message("validateUser returning and moving to next step");
 
 		String templatePath = gmiServerURL + "/tenant/" + tenant + "/app/" + config.gmiApplicationName() + "/template/"
@@ -188,16 +223,35 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 				+ config.messageExpiresInSeconds() + "}";
 		debug.message("IWS Message JSON: {} ", messageJson);
 
-		biometricVerifyUser(context, token, templatePath + "/person/" + person.getId() + "/message",
+		try
+		{
+			biometricVerifyUser(context, tokenService.getBearerToken(), templatePath + "/person/" + person.getId() + "/message",
 				gmiServerURL + "/tenant/" + tenant + "/person/" + person.getId() + "/message/%s/response",
 				messageJson);
+		}
+		catch (UnauthorizedException ue)
+		{
+			tokenService.setBearerToken(null);
+			
+			try
+			{
+				biometricVerifyUser(context, tokenService.getBearerToken(), templatePath + "/person/" + person.getId() + "/message",
+						gmiServerURL + "/tenant/" + tenant + "/person/" + person.getId() + "/message/%s/response",
+						messageJson);
+			}
+			catch (UnauthorizedException e)
+			{
+				debug.error("Cannot successfully use new UserManager OAuth token.");
+				throw new NodeProcessException(e);
+			}
+			
+		}
 		debug.message("biometricVerifyUser returning and completing authentication");
 		
 		return goToNext().replaceSharedState(context.sharedState.copy().
-				put(ImageWareCommon.IMAGEWARE_OAUTH_BEARER_TOKEN, token.getAccessToken())).
+				put(ImageWareCommon.IMAGEWARE_OAUTH_BEARER_TOKEN, tokenService.getBearerToken().getAccessToken())).
 				build();
 	}
-
 
 
 	private void validateConfiguration() throws NodeProcessException
@@ -279,7 +333,7 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 
 
 	private void biometricVerifyUser(TreeContext context, OauthBearerToken token, String
-			gmiMessageUrl, String gmiVerifyUrlTemp, String messageJson) throws NodeProcessException {
+			gmiMessageUrl, String gmiVerifyUrlTemp, String messageJson) throws NodeProcessException, UnauthorizedException {
 
 		CloseableHttpResponse response;
 		HttpPost httpPost = new HttpPost(gmiMessageUrl);
@@ -297,7 +351,11 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 		// investigate response for success/failure
 		StatusLine statusLine = response.getStatusLine();
 
-		if (statusLine.getStatusCode() != HttpStatus.SC_CREATED) {
+		if (response.getStatusLine().getStatusCode() == HttpStatus.SC_UNAUTHORIZED) {
+			throw ImageWareCommon.getUnauthorizedException(String.format("Unauthorized acccess. May need a new OAuth token",
+					response.getStatusLine()));
+		}			
+		else if (statusLine.getStatusCode() != HttpStatus.SC_CREATED) {
 			String msg = String.format("GMI verification failed in %s error response: '%s: %s'", ImageWareCommon
 					.IMAGEWARE_APPLICATION_NAME, statusLine.getStatusCode(), statusLine.getReasonPhrase());
 			debug.error(msg);
@@ -322,7 +380,7 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 	}
 
 	private Person validateUser(String username, OauthBearerToken token, String gmiServerURL) throws
-			NodeProcessException {
+			UnauthorizedException, NodeProcessException {
 
 		Person person;
 		CloseableHttpResponse response;
@@ -343,16 +401,22 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 			throw new NodeProcessException(String.format("Error. No response from %s", ImageWareCommon
 					.IMAGEWARE_APPLICATION_NAME));
 		}
-		// get entity from response
-		HttpEntity entity = response.getEntity();
 
 		// investigate response for success/failure
-		if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-			throw getUserManagerCallFailedException(String.format("Error in contacting UserManager. Status: %s",
+		if (response.getStatusLine().getStatusCode() == HttpStatus.SC_UNAUTHORIZED) {
+			throw ImageWareCommon.getUnauthorizedException(String.format("Unauthorized acccess. May need a new OAuth token",
+					response.getStatusLine()));
+		}			
+		else if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
+			throw ImageWareCommon.getUserManagerCallFailedException(String.format("Error in contacting UserManager. Status: %s",
 					response.getStatusLine()));
 		}
 
 		try {
+
+			// get entity from response
+			HttpEntity entity = response.getEntity();
+			
 			person = new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue
 					(EntityUtils.toString(entity), Person.class);
 			// and ensure it is fully consumed
@@ -364,58 +428,5 @@ public class ImageWareInitiator extends SingleOutcomeNode {
 
 		if (person == null) throw new NodeProcessException("Person is null");
 		return person;
-	}
-
-	private OauthBearerToken getOauthToken(String clientName, String clientSecret) throws
-			NodeProcessException {
-
-		String userManagerURL = getUserManagerURL();
-		CloseableHttpResponse response;
-
-		HttpGet httpGet = new HttpGet(userManagerURL);
-		httpGet.setHeader("Content-Type", "application/x-www-form-urlencoded");
-		httpGet.setHeader("Authorization", "Basic " + new String(Base64.encodeBase64((clientName + ":" +
-				clientSecret).getBytes())));
-
-		try {
-			response =  HttpClients.createSystem().execute(httpGet);
-		}
-		catch (Exception e) {
-			debug.error("Exception in getOauthToken: '{}'", e);
-			throw new NodeProcessException(e);
-		}
-
-		if (response == null) throw new  NodeProcessException(getUserManagerCallFailedException("Error in retrieving " +
-				"response from UserManager. Response is null"));
-		// get entity from response
-		HttpEntity entity = response.getEntity();
-		StatusLine statusLine = response.getStatusLine();
-
-		// investigate response for success/failure
-		if (statusLine.getStatusCode() != HttpStatus.SC_OK) {
-			throw new NodeProcessException(getUserManagerCallFailedException( String.format("Error in contacting " +
-					"UserManager. Status: %s", statusLine)));
-		}
-
-		OauthBearerToken token;
-		try {
-			token = new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue
-					(EntityUtils.toString(entity), OauthBearerToken.class);
-
-			// and ensure it is fully consumed
-			EntityUtils.consume(entity);
-		}
-		catch (IOException e) {
-			throw new NodeProcessException(e);
-		}
-		if (token == null) throw new NodeProcessException("OAuth Token is null");
-
-		return token;
-	}
-
-	private UserManagerCallFailedException getUserManagerCallFailedException(String msg) {
-		UserManagerCallFailedException e = new UserManagerCallFailedException();
-		e.setMessageCode(msg);
-		return e;
 	}
 }
