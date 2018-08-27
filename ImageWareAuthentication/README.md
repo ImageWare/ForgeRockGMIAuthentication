@@ -29,8 +29,11 @@ The ImageWare Initiator node
    * Retrieves an OAuth token from ImageWare’s User Manager or fails in error
    * Verifies the user belongs to the associated Tenant name or fails in error
    * Sends a biometric verification message to the user’s mobile device or fails in error
+
 The Polling Wait Node controls the time delay before the ImageWare Decision node looks for the authentication response.
+
 The Retry Limit Decision node controls how many times the ImageWare Decision node will try to process an authentication response.
+
 The ImageWare Decision node
    * Looks for an authentication response to the original verification call and passes control back to the Retry Limit Decision node if none is found
    * Verifies the biometric authentication for the user and returns status of pass or fail
