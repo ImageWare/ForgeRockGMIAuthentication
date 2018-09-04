@@ -59,14 +59,22 @@ public class TokenService
  	}
  	
 
-	public static void setConfig(Config config)
+	public static void setConfig(ImageWareInitiator.Config config)
 	{
 		clientName = config.clientName();
 		clientSecret = config.clientSecret();
 		userManagerURL = config.userManagerURL() + "/oauth/token?scope=ignored&grant_type=client_credentials";
 		
 	}
-
+	
+	public static void setConfig(ImageWareRegistration.Config config)
+	{
+		clientName = config.clientName();
+		clientSecret = config.clientSecret();
+		userManagerURL = config.userManagerURL() + "/oauth/token?scope=ignored&grant_type=client_credentials";
+		
+	}
+	
 	private boolean isTokenExpired()
 	{
 		if (getTokenExpiresAt() <= System.currentTimeMillis()/1000)

@@ -58,7 +58,7 @@ import org.forgerock.openam.plugins.PluginException;
  */
 public class ImageWarePlugin extends AbstractNodeAmPlugin {
 
-	static private String currentVersion = "1.0.0";
+	static private String currentVersion = "1.1.0";
 	
     /** 
      * Specify the Map of list of node classes that the plugin is providing. These will then be installed and
@@ -69,7 +69,7 @@ public class ImageWarePlugin extends AbstractNodeAmPlugin {
 	@Override
 	protected Map<String, Iterable<? extends Class<? extends Node>>> getNodesByVersion() {
 		return Collections.singletonMap(ImageWarePlugin.currentVersion, 
-				Arrays.asList(ImageWareInitiator.class, ImageWareDecision.class));
+				Arrays.asList(ImageWareInitiator.class, ImageWareDecision.class, ImageWareRegistration.class));
 	}
 
     /** 
