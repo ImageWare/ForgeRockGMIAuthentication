@@ -21,6 +21,8 @@ import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -502,12 +504,12 @@ public class ImageWareRegistration extends AbstractDecisionNode
 					}			
 					else if (response.getStatusLine().getStatusCode() == org.apache.http.HttpStatus.SC_CONFLICT)
 					{
-						//debug.error("Error in {}. User with email address '{}' already exists in tenant '{}'", ImageWareCommon.IMAGEWARE_APPLICATION_NAME, emailAddress, tenant);
-						//setCurrentErrorMessage(String.format("User with email address '%s' already exists for tenant '%s'", emailAddress, tenant));
-						
+						// if person exists in GMI, get the Person record
 						try {
 							
-							HttpGet httpGet = new HttpGet(getGmiServerURL() + "/person/userId=" + emailAddress );
+							String emailAddressEncoded = ImageWareCommon.encodeEmailAddress(emailAddress);
+							
+							HttpGet httpGet = new HttpGet(getGmiServerURL() + "/person?userId=" + emailAddressEncoded);
 							httpGet.setHeader("Content-Type", "application/json");
 							httpGet.setHeader("Authorization", "Bearer " + token.getAccessToken());
 
@@ -564,7 +566,7 @@ public class ImageWareRegistration extends AbstractDecisionNode
 		
 		return person;
 	}
-	
+
 
 	private UserManagerCallFailedException getUserManagerCallFailedException(String msg) {
 		UserManagerCallFailedException e = new UserManagerCallFailedException();

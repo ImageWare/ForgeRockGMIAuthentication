@@ -1,5 +1,10 @@
 package com.iws.forgerock;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+
+import org.forgerock.openam.auth.node.api.NodeProcessException;
+
 import com.iwsinc.usermanager.exception.UserManagerCallFailedException;
 
 public class ImageWareCommon
@@ -35,4 +40,20 @@ public class ImageWareCommon
 	{
 		return new ImageWareCommon().new UnauthorizedException(message);
 	}
+	
+
+	static String encodeEmailAddress(String emailAddress) throws NodeProcessException
+	{
+		String emailAddressEncoded = null;
+		try
+		{
+			emailAddressEncoded = URLEncoder.encode(emailAddress, "UTF-8");
+		}
+		catch (UnsupportedEncodingException uee)
+		{
+			throw new NodeProcessException(uee.getLocalizedMessage());
+		}
+		return emailAddressEncoded;
+	}
+	
 }

@@ -21,6 +21,8 @@ import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -380,7 +382,9 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 		Person person;
 		CloseableHttpResponse response;
 
-		HttpGet httpGet = new HttpGet(gmiServerURL + "/person?userId=" + emailAddress);
+		String emailAddressEncoded = ImageWareCommon.encodeEmailAddress(emailAddress);
+		
+		HttpGet httpGet = new HttpGet(gmiServerURL + "/person?userId=" + emailAddressEncoded);
 		httpGet.setHeader("Content-Type", "application/json");
 		httpGet.setHeader("Authorization", "Bearer " + token.getAccessToken());
 
