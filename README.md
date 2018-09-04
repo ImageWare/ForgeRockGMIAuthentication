@@ -46,7 +46,7 @@ Add ImageWares' public git repo to your maven environment.
 > mvn package
 
 Authentication Workflow example:
-![ScreenShot](./images/workflow.png)
+![ScreenShot](./images/auth_reg_workflow.png)
 
 ImageWare Initiator settings example:
 ![ScreenShot](./images/validateuser_settings.png)
