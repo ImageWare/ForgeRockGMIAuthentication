@@ -41,7 +41,17 @@ public class ImageWareDecision implements Node {
 	private final static String DEBUG_FILE = "ImageWareDecision";
 	private Debug debug = Debug.getInstance(DEBUG_FILE);
 	private TokenService tokenService = null;
-
+	private ResourceBundle resourceBundle;
+	
+	private void setResourceBundle(ResourceBundle resourceBundle)
+	{
+		this.resourceBundle = resourceBundle;
+	}
+	
+	private ResourceBundle getResourceBundle()
+	{
+		return resourceBundle;
+	}
 
 	/**
 	 * Configuration for the node.
@@ -57,12 +67,14 @@ public class ImageWareDecision implements Node {
     public ImageWareDecision() {
     }
 
-    private ActionBuilder goTo(ImageWareDecisionOutcome outcome) { return Action.goTo(outcome.name()); }
-
 	@Override
 	public Action process(TreeContext context) throws NodeProcessException {
+		
 		debug.message("ImageWareDecision started");
     	
+        ResourceBundle bundle = context.request.locales.getBundleInPreferredLocale(ImageWareDecision.BUNDLE, ImageWareDecisionOutcomeProvider.class.getClassLoader());
+		setResourceBundle(bundle);
+        
 		Boolean verified = null;
 		tokenService = TokenService.getInstance();
 		
@@ -90,13 +102,13 @@ public class ImageWareDecision implements Node {
 		}
 		
 		if (verified == null) {
-        	return goTo(ImageWareDecisionOutcome.UNANSWERED).build();
+        	return Action.goTo(ImageWareDecisionOutcome.UNANSWERED.name()).build();
     	}
     	else if (verified) {
-        	return goTo(ImageWareDecisionOutcome.TRUE).build();
+        	return Action.goTo(ImageWareDecisionOutcome.TRUE.name()).build();
         }
         else {
-        	return goTo(ImageWareDecisionOutcome.FALSE).build();
+        	return Action.goTo(ImageWareDecisionOutcome.FALSE.name()).build();
         }
 	}
 
@@ -119,8 +131,7 @@ public class ImageWareDecision implements Node {
 		}
 
 		if (response == null) {
-			String msg = String.format("Error in %s handleVerifyResponse: Verification Response from GMI " +
-							"server was null", ImageWareCommon.IMAGEWARE_APPLICATION_NAME);
+			String msg = String.format(getResourceBundle().getString("handleVerifyResponseEmpty"), ImageWareCommon.IMAGEWARE_APPLICATION_NAME);
 			debug.error(msg);
 			throw new NodeProcessException(msg);
 		}
@@ -130,12 +141,10 @@ public class ImageWareDecision implements Node {
 
 		// investigate response for success/failure
 		if (response.getStatusLine().getStatusCode() == HttpStatus.SC_UNAUTHORIZED) {
-			throw ImageWareCommon.getUnauthorizedException(String.format("Unauthorized acccess. May need a new OAuth token",
-					response.getStatusLine()));
+			throw ImageWareCommon.getUnauthorizedException(getResourceBundle().getString("unauthorizedAccess"));
 		}			
 		else if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-			throw new NodeProcessException(String.format("Error in handleVerifyResponse contacting GMI " +
-					"Server. Status: %s", response.getStatusLine()));
+			throw new NodeProcessException(String.format(getResourceBundle().getString("handleVerifyResponseIncorrectStatus"), ImageWareCommon.IMAGEWARE_APPLICATION_NAME, response.getStatusLine()));
 		}
 
 
@@ -196,8 +205,8 @@ public class ImageWareDecision implements Node {
     public static class ImageWareDecisionOutcomeProvider implements OutcomeProvider {
         @Override
         public List<Outcome> getOutcomes(PreferredLocales locales, JsonValue nodeAttributes) {
-            ResourceBundle bundle = locales.getBundleInPreferredLocale(ImageWareDecision.BUNDLE,
-					ImageWareDecisionOutcomeProvider.class.getClassLoader());
+    		ResourceBundle bundle = locales.getBundleInPreferredLocale(ImageWareDecision.BUNDLE,
+    				ImageWareDecision.class.getClassLoader());
             return ImmutableList.of(
                     new Outcome(ImageWareDecisionOutcome.TRUE.name(), bundle.getString("trueOutcome")),
                     new Outcome(ImageWareDecisionOutcome.FALSE.name(), bundle.getString("falseOutcome")),

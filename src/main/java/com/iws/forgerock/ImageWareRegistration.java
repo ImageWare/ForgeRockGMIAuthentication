@@ -64,6 +64,7 @@ import com.iws.forgerock.gmi.entity.DeviceApplication;
 import com.iws.forgerock.gmi.entity.Person;
 import com.iwsinc.usermanager.client.OauthBearerToken;
 import com.iwsinc.usermanager.exception.UserManagerCallFailedException;
+import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
 import com.sun.identity.idm.AMIdentity;
 import com.sun.identity.idm.IdRepoException;
 import com.sun.identity.shared.debug.Debug;
@@ -123,23 +124,6 @@ public class ImageWareRegistration extends AbstractDecisionNode
 	 */
 	public interface Config
 	{
-		@Attribute(order = 100,  validators = {RequiredValueValidator.class})
-		default String tenantName() { return ""; }
-
-		@Attribute(order = 200,  validators = {RequiredValueValidator.class})
-		default String clientName() { return ""; }
-
-		@Attribute(order = 300,  validators = {RequiredValueValidator.class})
-		default String clientSecret() { return ""; }
-
-		@Attribute(order = 400,  validators = {RequiredValueValidator.class})
-		default String userManagerURL() { return "https://gmi-ha.iwsinc.com/usermanager"; }
-
-		@Attribute(order = 500,  validators = {RequiredValueValidator.class})
-		default String gmiServerURL() { return "https://gmi-ha.iwsinc.com/gmiserver"; }
-
-		@Attribute(order = 600,  validators = {RequiredValueValidator.class})
-		default String gmiApplicationName() { return "GoVerifyID"; }
 	}
 
 
@@ -162,6 +146,40 @@ public class ImageWareRegistration extends AbstractDecisionNode
 	public Action process(TreeContext context) throws NodeProcessException
 	{
 
+		ResourceBundle bundle = context.request.locales.getBundleInPreferredLocale(ImageWareRegistration.BUNDLE, ImageWareRegistration.class.getClassLoader());
+		String userSelfRegisterInfoTemplate = bundle.getString("selfRegistrationMessage");
+		String userTenantRegisterInfoTemplate = bundle.getString("tenantRegistrationMessage");
+		
+		ScriptTextOutputCallback scriptCallback = new ScriptTextOutputCallback("document.getElementById('loginButton_0').value='Registration Complete'");
+		
+		// check call back status and go to true when already showing the callback
+		// check for both the script and textoutput callbacks
+		List<? extends Callback> incomingCallbacks = context.getAllCallbacks();
+		boolean foundScript = false;
+		boolean foundText = false;
+		
+		String userSelfRegisterSubstring = userSelfRegisterInfoTemplate.substring(0, 50);
+		String userTenantRegisterSubstring = userTenantRegisterInfoTemplate.substring(0, 50);
+		
+		for (Callback cb : incomingCallbacks)
+		{
+			if (cb instanceof ScriptTextOutputCallback && ((ScriptTextOutputCallback)cb).getMessage().equals(scriptCallback.getMessage()))
+			{
+				foundScript = true;
+			}
+			
+			if ( cb instanceof TextOutputCallback && (((TextOutputCallback)cb).getMessage().contains(userSelfRegisterSubstring) || ((TextOutputCallback)cb).getMessage().contains(userTenantRegisterSubstring)) )
+			{
+				foundText = true;
+			}
+		}
+		
+		if (foundScript && foundText)
+		{
+			return this.goTo(true).build();
+		}
+		
+		
 		// NOTE: The user being registered is a Person entity in GMI
 	
 
@@ -173,7 +191,7 @@ public class ImageWareRegistration extends AbstractDecisionNode
 
 		try
 		{
-			validateConfiguration();
+			//validateConfiguration();
 			
 			String username = context.sharedState.get(USERNAME).asString();
 			debug.message("Username {}.", username);
@@ -187,12 +205,13 @@ public class ImageWareRegistration extends AbstractDecisionNode
 		{
 			if (getCurrentErrorMessage() != null)
 			{
-				Action.ActionBuilder registerResult = this.goTo(false);
-				final List<Callback> callbacks = (List<Callback>) ImmutableList.of((Callback) new TextOutputCallback(0, getCurrentErrorMessage()));
-				registerResult = Action.send(callbacks);
-				// TODO send javascript to remove log in button
+				Callback returnToLoginScriptCallback = new ScriptTextOutputCallback(ImageWareCommon.getReturnToLoginJS());
+				Callback textCallback = new TextOutputCallback(0, getCurrentErrorMessage());
+				final List<Callback> callbacks = (List<Callback>) ImmutableList.of(textCallback, returnToLoginScriptCallback);
 				
-				return registerResult.build();
+				Action.ActionBuilder authenticateResult = Action.send(callbacks);
+				
+				return authenticateResult.build();
 			}
 			else
 			{
@@ -200,12 +219,10 @@ public class ImageWareRegistration extends AbstractDecisionNode
 			}
 		}
 		
-		String tenant = config.tenantName();
-		String applicationName = config.gmiApplicationName();
-		
-		setGmiServerURL(config.gmiServerURL());
+		String tenant = context.sharedState.get(ImageWareCommon.IMAGEWARE_TENANT_NAME).asString();
+		String applicationName = context.sharedState.get(ImageWareCommon.IMAGEWARE_PARAM_APPLICATION_NAME).asString();
+		setGmiServerURL(context.sharedState.get(ImageWareCommon.IMAGEWARE_GMI_SERVER).asString());
 				
-		TokenService.setConfig(config);
 		tokenService = TokenService.getInstance();
 
 		// Step 2: authorize oauth client
@@ -243,10 +260,12 @@ public class ImageWareRegistration extends AbstractDecisionNode
 		{
 			if (getCurrentErrorMessage() != null)
 			{
-				Action.ActionBuilder registerResult = this.goTo(false);
-				final List<Callback> callbacks = (List<Callback>) ImmutableList.of((Callback) new TextOutputCallback(0, getCurrentErrorMessage()));
-				registerResult = Action.send(callbacks);
-				// TODO send javascript to remove log in button
+
+				Callback returnToLoginScriptCallback = new ScriptTextOutputCallback(ImageWareCommon.getReturnToLoginJS());
+				Callback textCallback = new TextOutputCallback(0, getCurrentErrorMessage());
+				final List<Callback> callbacks = (List<Callback>) ImmutableList.of(textCallback, returnToLoginScriptCallback);
+				
+				Action.ActionBuilder registerResult = Action.send(callbacks);
 				
 				return registerResult.build();
 			}
@@ -262,12 +281,10 @@ public class ImageWareRegistration extends AbstractDecisionNode
 			
 		
 		// If the GMI TenantApplication.validationType property is set to "email" then this user will be able to self-register
-		// Otherwise the user must wait for Tenant Admin to finalize the registration process
-		ResourceBundle bundle = context.request.locales.getBundleInPreferredLocale(ImageWareRegistration.BUNDLE, ImageWareRegistration.class.getClassLoader());
-        
-		String userRegisterInfo = String.format(bundle.getString("selfRegistrationMessage"), applicationName);
-				
+		// Otherwise the user must wait for Tenant Admin to finalize the registration process        
+		String userRegisterInfo = String.format(userSelfRegisterInfoTemplate, applicationName);
 		Application application = null;
+		
 		try
 		{
 			application = getTenantApplication(tenant, applicationName);
@@ -291,45 +308,45 @@ public class ImageWareRegistration extends AbstractDecisionNode
 			
 		if (! application.getValidationType().equals(ImageWareCommon.IMAGEWARE_EMAIL_VALIDATION_TYPE))
 		{
-			userRegisterInfo = bundle.getString("tenantRegistrationMessage");
+			userRegisterInfo = userTenantRegisterInfoTemplate;
 		}
 	
-		Action.ActionBuilder registerResult = this.goTo(true);
-		final List<Callback> callbacks = (List<Callback>) ImmutableList.of((Callback) new TextOutputCallback(0, userRegisterInfo));
-		registerResult = Action.send(callbacks);
+		Callback textCallback = new TextOutputCallback(0, userRegisterInfo);
+		final List<Callback> callbacks = (List<Callback>) ImmutableList.of(textCallback, scriptCallback);
+		Action.ActionBuilder registerResult = Action.send(callbacks);
 		
 		return registerResult.build();
 		
 	}
 	
 
-	private void validateConfiguration() throws NodeProcessException
-	{
-		
-		if (StringUtils.isEmpty(config.tenantName())) 
-		{ 
-			setCurrentErrorMessage("Tenant Name is empty in node configuration");
-			throw new NodeProcessException(getCurrentErrorMessage());
-		}
-		
-		if (StringUtils.isEmpty(config.gmiApplicationName())) 
-		{ 
-			setCurrentErrorMessage("Application Name is empty in node configuration");
-			throw new NodeProcessException(getCurrentErrorMessage());
-		}
-
-		if (StringUtils.isEmpty(config.clientName())) 
-		{ 
-			setCurrentErrorMessage("OAuth Client Name is empty in node configuration");
-			throw new NodeProcessException(getCurrentErrorMessage());
-		}
-
-		if (StringUtils.isEmpty(config.clientSecret())) 
-		{ 
-			setCurrentErrorMessage("OAuth Client Secret is empty in node configuration");
-			throw new NodeProcessException(getCurrentErrorMessage());
-		}
-	}
+//	private void validateConfiguration() throws NodeProcessException
+//	{
+//		
+//		if (StringUtils.isEmpty(config.tenantName())) 
+//		{ 
+//			setCurrentErrorMessage("Tenant Name is empty in node configuration");
+//			throw new NodeProcessException(getCurrentErrorMessage());
+//		}
+//		
+//		if (StringUtils.isEmpty(config.gmiApplicationName())) 
+//		{ 
+//			setCurrentErrorMessage("Application Name is empty in node configuration");
+//			throw new NodeProcessException(getCurrentErrorMessage());
+//		}
+//
+//		if (StringUtils.isEmpty(config.clientName())) 
+//		{ 
+//			setCurrentErrorMessage("OAuth Client Name is empty in node configuration");
+//			throw new NodeProcessException(getCurrentErrorMessage());
+//		}
+//
+//		if (StringUtils.isEmpty(config.clientSecret())) 
+//		{ 
+//			setCurrentErrorMessage("OAuth Client Secret is empty in node configuration");
+//			throw new NodeProcessException(getCurrentErrorMessage());
+//		}
+//	}
 
 	private String getUserEmail(AMIdentity userIdentity) throws NodeProcessException {
 		Iterator<String> emailAddressIterator;

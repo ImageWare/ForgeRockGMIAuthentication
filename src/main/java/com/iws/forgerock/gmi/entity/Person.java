@@ -25,12 +25,14 @@
 package com.iws.forgerock.gmi.entity;
 
 import javax.validation.constraints.Pattern;
+import javax.xml.bind.annotation.XmlRootElement;
 
 
 
 /**
  *
  */
+@XmlRootElement
 public class Person
 {
 	public static final String BIOMETRIC_METADATA = "biometricMetadata";
@@ -64,6 +66,16 @@ public class Person
 		m_user_id = user_id;
 	}
 
+	public void setData(Metadata data)
+	{
+		m_data = data;
+	}
+
+	public Metadata getData()
+	{
+		return m_data;
+	}
+
 	public String getEnrollServer()
 	{
 		return m_enroll_server;
@@ -84,6 +96,15 @@ public class Person
 		m_verify_server = verify_server;
 	}
 
+	public void setTenantData(Metadata data)
+	{
+		m_tenant_data = data;
+	}
+
+	public Metadata getTenantData()
+	{
+		return m_tenant_data;
+	}
 
 	public String getTenantEnrollServer()
 	{
@@ -123,8 +144,10 @@ public class Person
 
 	@Pattern(regexp="[0-9]{7}", message="Invalid value.  Must contain 7 numbers")
 	private String 		m_voice_digits = null;
+	private Metadata	m_data = null;
 	private String		m_enroll_server = null;
 	private String		m_verify_server = null;
+	private Metadata	m_tenant_data = null;
 	private String		m_tenant_enroll_server = null;
 	private String		m_tenant_verify_server = null;
 

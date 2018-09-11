@@ -21,11 +21,10 @@ import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.ResourceBundle;
 
 import javax.inject.Inject;
 import javax.security.auth.callback.Callback;
@@ -49,6 +48,7 @@ import org.forgerock.openam.auth.node.api.Node;
 import org.forgerock.openam.auth.node.api.NodeProcessException;
 import org.forgerock.openam.auth.node.api.TreeContext;
 import org.forgerock.openam.core.CoreWrapper;
+import org.forgerock.openam.sm.annotations.adapters.Password;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -59,6 +59,7 @@ import com.iws.forgerock.gmi.entity.DeviceApplication;
 import com.iws.forgerock.gmi.entity.Message;
 import com.iws.forgerock.gmi.entity.Person;
 import com.iwsinc.usermanager.client.OauthBearerToken;
+import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
 import com.sun.identity.idm.AMIdentity;
 import com.sun.identity.idm.IdRepoException;
 import com.sun.identity.shared.debug.Debug;
@@ -70,14 +71,17 @@ import com.sun.identity.sm.RequiredValueValidator;
  */
 @Node.Metadata(outcomeProvider = AbstractDecisionNode.OutcomeProvider.class, configClass = ImageWareInitiator.Config.class)
 public class ImageWareInitiator extends AbstractDecisionNode {
+	
+
+	private static final String BUNDLE = "com/iws/forgerock/ImageWareInitiator";
+	
 	private final Config config;
 	private final CoreWrapper coreWrapper;
 	private final static String DEBUG_FILE = "ImageWareInitiator";
 	private Debug debug = Debug.getInstance(DEBUG_FILE);
 	private String currentErrorMessage;
 	private TokenService tokenService = null;
-
-	
+	private ResourceBundle resourceBundle;
 	private void setCurrentErrorMessage(String currentErrorMessage)
 	{
 		this.currentErrorMessage = currentErrorMessage;
@@ -88,6 +92,15 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 		return currentErrorMessage;
 	}
 	
+	private void setResourceBundle(ResourceBundle resourceBundle)
+	{
+		this.resourceBundle = resourceBundle;
+	}
+	
+	private ResourceBundle getResourceBundle()
+	{
+		return resourceBundle;
+	}
 	
 
 
@@ -102,7 +115,8 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 		default String clientName() { return ""; }
 
 		@Attribute(order = 300, validators = {RequiredValueValidator.class})
-		default String clientSecret() { return ""; }
+		@Password
+		char[] clientSecret();
 
 		@Attribute(order = 400,  validators = {RequiredValueValidator.class})
 		default String userManagerURL() { return "https://gmi-ha.iwsinc.com/usermanager"; }
@@ -142,6 +156,38 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 
 		debug.message("ImageWareInitiator started");
 		
+		ResourceBundle bundle = context.request.locales.getBundleInPreferredLocale(ImageWareInitiator.BUNDLE, ImageWareInitiator.class.getClassLoader());
+		setResourceBundle(bundle);
+		
+		
+		// check call back status and go to true when already showing the callback
+		// check for both the script and textoutput callbacks
+		List<? extends Callback> incomingCallbacks = context.getAllCallbacks();
+		boolean foundScript = false;
+		boolean foundText = false;
+		
+		
+		for (Callback cb : incomingCallbacks)
+		{
+			if (cb instanceof ScriptTextOutputCallback && ((ScriptTextOutputCallback)cb).getMessage().equals(ImageWareCommon.getReturnToLoginJS()))
+			{
+				foundScript = true;
+			}
+			
+			if ( cb instanceof TextOutputCallback && ((TextOutputCallback)cb).getMessage().contains(getCurrentErrorMessage()) )
+			{
+				foundText = true;
+			}
+		}
+		
+		if (foundScript && foundText)
+		{
+			return this.goTo(false).build();
+		}
+				
+		
+		
+		
 		String emailAddress = null;
 		String username = null;
 		
@@ -162,10 +208,11 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 		{
 			if (getCurrentErrorMessage() != null)
 			{
-				Action.ActionBuilder authenticateResult = goTo(true);
-				final List<Callback> callbacks = (List<Callback>) ImmutableList.of((Callback) new TextOutputCallback(0, getCurrentErrorMessage()));
-				authenticateResult = Action.send(callbacks);
-				// TODO send javascript to remove log in button
+				Callback returnToLoginScriptCallback = new ScriptTextOutputCallback(ImageWareCommon.getReturnToLoginJS());
+				Callback textCallback = new TextOutputCallback(0, getCurrentErrorMessage());
+				final List<Callback> callbacks = (List<Callback>) ImmutableList.of(textCallback, returnToLoginScriptCallback);
+				
+				Action.ActionBuilder authenticateResult = Action.send(callbacks);
 				
 				return authenticateResult.build();
 			}
@@ -206,7 +253,11 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 		if (person == null)
 		{
 			return goTo(false).replaceSharedState(context.sharedState.copy().
-					put(ImageWareCommon.IMAGEWARE_OAUTH_BEARER_TOKEN, tokenService.getBearerToken().getAccessToken())).
+					put(ImageWareCommon.IMAGEWARE_OAUTH_BEARER_TOKEN, tokenService.getBearerToken().getAccessToken()).
+					put(ImageWareCommon.IMAGEWARE_GMI_SERVER, gmiServerURL).
+					put(ImageWareCommon.IMAGEWARE_TENANT_NAME, tenant).
+					put(ImageWareCommon.IMAGEWARE_PARAM_APPLICATION_NAME, config.gmiApplicationName())
+					).
 					build();
 		}
 		
@@ -271,7 +322,7 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 			throw new NodeProcessException(getCurrentErrorMessage());
 		}
 
-		if (StringUtils.isEmpty(config.clientSecret())) 
+		if (config.clientSecret() == null || config.clientSecret().length == 0) 
 		{ 
 			setCurrentErrorMessage("OAuth Client Secret is empty in node configuration");
 			throw new NodeProcessException(getCurrentErrorMessage());
@@ -296,7 +347,7 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 		}
 
 		if (!emailAddressIterator.hasNext()) {
-			String errorMessage = String.format("User: '%s' has no email address in profile.", userIdentity.getName());
+			String errorMessage = String.format(getResourceBundle().getString("userNoEmailAddress"), userIdentity.getName());
 			debug.error(errorMessage);
 			setCurrentErrorMessage(errorMessage);
 			throw new NodeProcessException(errorMessage);
@@ -310,7 +361,7 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 
 		if (StringUtils.isEmpty(username))
 		{
-			errorMessage = "Username not available.";
+			errorMessage = getResourceBundle().getString("usernameNotAvailable");
 			debug.error(errorMessage);
 			setCurrentErrorMessage(errorMessage);
 			throw new NodeProcessException(errorMessage);
@@ -319,7 +370,7 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 		AMIdentity userIdentity = coreWrapper.getIdentity(username, coreWrapper.convertRealmPathToRealmDn(context
 				.sharedState.get(REALM).asString()));
 		if (userIdentity == null) {
-			errorMessage = String.format("User: '%s' does not exist.", username);
+			errorMessage = String.format(getResourceBundle().getString("userNotExist"), username);
 			debug.error(errorMessage);
 			setCurrentErrorMessage(errorMessage);
 			throw new NodeProcessException(errorMessage);
@@ -348,11 +399,10 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 		StatusLine statusLine = response.getStatusLine();
 
 		if (response.getStatusLine().getStatusCode() == HttpStatus.SC_UNAUTHORIZED) {
-			throw ImageWareCommon.getUnauthorizedException(String.format("Unauthorized acccess. May need a new OAuth token",
-					response.getStatusLine()));
+			throw ImageWareCommon.getUnauthorizedException(getResourceBundle().getString("unauthorizedAccess"));
 		}			
 		else if (statusLine.getStatusCode() != HttpStatus.SC_CREATED) {
-			String msg = String.format("GMI verification failed in %s error response: '%s: %s'", ImageWareCommon
+			String msg = String.format(getResourceBundle().getString("gmiVerificationError"), ImageWareCommon
 					.IMAGEWARE_APPLICATION_NAME, statusLine.getStatusCode(), statusLine.getReasonPhrase());
 			debug.error(msg);
 			throw new NodeProcessException(msg);
@@ -367,7 +417,7 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 		}
 
 		if (message == null || message.getMessageId() == null) {
-			throw new NodeProcessException("biometricVerifyUser cannot read GMI Message");
+			throw new NodeProcessException(getResourceBundle().getString("cannotReadGmiMessage"));
 		}
 
 		// share verification response url in state for retrieval later
@@ -397,8 +447,7 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 		}
 
 		if (response == null) {
-			throw new NodeProcessException(String.format("Error. No response from %s", ImageWareCommon
-					.IMAGEWARE_APPLICATION_NAME));
+			throw new NodeProcessException(String.format(getResourceBundle().getString("noResponse"), ImageWareCommon.IMAGEWARE_APPLICATION_NAME));
 		}
 
 		// investigate response for success/failure
@@ -406,12 +455,10 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 			return null;
 		}	
 		else if (response.getStatusLine().getStatusCode() == HttpStatus.SC_UNAUTHORIZED) {
-			throw ImageWareCommon.getUnauthorizedException(String.format("Unauthorized acccess. May need a new OAuth token",
-					response.getStatusLine()));
+			throw ImageWareCommon.getUnauthorizedException(getResourceBundle().getString("unauthorizedAccess"));
 		}			
 		else if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-			throw ImageWareCommon.getUserManagerCallFailedException(String.format("Error in contacting UserManager. Status: %s",
-					response.getStatusLine()));
+			throw ImageWareCommon.getUserManagerCallFailedException(String.format(getResourceBundle().getString("errorUserManager"), response.getStatusLine()));
 		}
 
 		try {
@@ -446,18 +493,15 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 		}
 
 		if (response == null) {
-			throw new NodeProcessException(String.format("Error. No response from %s", ImageWareCommon
-					.IMAGEWARE_APPLICATION_NAME));
+			throw new NodeProcessException(String.format(getResourceBundle().getString("noResponse"), ImageWareCommon.IMAGEWARE_APPLICATION_NAME));
 		}
 
 		// investigate response for success/failure
 		if (response.getStatusLine().getStatusCode() == HttpStatus.SC_UNAUTHORIZED) {
-			throw ImageWareCommon.getUnauthorizedException(String.format("Unauthorized acccess. May need a new OAuth token",
-					response.getStatusLine()));
+			throw ImageWareCommon.getUnauthorizedException(getResourceBundle().getString("unauthorizedAccess"));
 		}			
 		else if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-			throw ImageWareCommon.getUserManagerCallFailedException(String.format("Error in contacting UserManager. Status: %s",
-					response.getStatusLine()));
+			throw ImageWareCommon.getUserManagerCallFailedException(String.format(getResourceBundle().getString("errorUserManager"), response.getStatusLine()));
 		}
 
 		try {
@@ -474,10 +518,10 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 			throw new NodeProcessException(e);
 		}
 
-		// check for not yet registered scenario
-		if (devices.isEmpty())
+		// check for not yet registered or not yet enrolled scenario
+		if ( devices.isEmpty() || person.getData() == null || person.getData().getBiometricMetadata() == null )
 		{
-			// not registered
+			// not registered or not enrolled
 			return null;
 		}
 		else

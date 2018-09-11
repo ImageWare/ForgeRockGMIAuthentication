@@ -11,6 +11,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.forgerock.openam.auth.node.api.NodeProcessException;
+import org.forgerock.openam.sm.annotations.adapters.Password;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,7 +33,9 @@ public class TokenService
      
  	private OauthBearerToken bearerToken = null;
  	private long tokenExpiresAt;
- 	private static String clientName, clientSecret, userManagerURL;
+ 	private static String clientName;
+ 	private static char[] clientSecret;
+ 	private static String userManagerURL;
 
 	public OauthBearerToken getBearerToken() throws NodeProcessException
  	{
@@ -67,13 +70,13 @@ public class TokenService
 		
 	}
 	
-	public static void setConfig(ImageWareRegistration.Config config)
-	{
-		clientName = config.clientName();
-		clientSecret = config.clientSecret();
-		userManagerURL = config.userManagerURL() + "/oauth/token?scope=ignored&grant_type=client_credentials";
-		
-	}
+//	public static void setConfig(ImageWareRegistration.Config config)
+//	{
+//		clientName = config.clientName();
+//		clientSecret = config.clientSecret();
+//		userManagerURL = config.userManagerURL() + "/oauth/token?scope=ignored&grant_type=client_credentials";
+//		
+//	}
 	
 	private boolean isTokenExpired()
 	{
@@ -84,14 +87,15 @@ public class TokenService
 		
 	}
 	
-    private OauthBearerToken storeOauthToken(String clientName, String clientSecret, String userManagerURL) throws NodeProcessException 
+    private OauthBearerToken storeOauthToken(String clientName, char[] clientSecret, String userManagerURL) throws NodeProcessException 
     {
 		CloseableHttpResponse response;
 	
+		String clientSecretString = new String(clientSecret);
+		
 		HttpGet httpGet = new HttpGet(userManagerURL);
 		httpGet.setHeader("Content-Type", "application/x-www-form-urlencoded");
-		httpGet.setHeader("Authorization", "Basic " + new String(Base64.encodeBase64((clientName + ":" +
-				clientSecret).getBytes())));
+		httpGet.setHeader("Authorization", "Basic " + new String(Base64.encodeBase64((clientName + ":" + clientSecretString).getBytes())));
 	
 		try {
 			response =  HttpClients.createSystem().execute(httpGet);
