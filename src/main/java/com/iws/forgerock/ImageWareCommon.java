@@ -42,9 +42,11 @@ public class ImageWareCommon
 	"var link = document.createElement('a');" +
 	"link.title = 'Return to Login Page';" +
 	"link.style = 'text-align: center; display: block;';" +
-	"link.href = '#login/&authIndexType=service&authIndexValue=ImageWare-Authentication';" + 
+	"link.href = 'javascript:window.location.reload(true)';" +
+	//"link.href = '#login/&authIndexType=service&authIndexValue=ImageWare-Authentication';" + 
 	"link.innerHTML = 'Return to Login Page';" +
-	"fieldset.appendChild(link);";
+	"fieldset.appendChild(link);" +
+	"document.getElementById('loginButton_0').style.display = 'none';";
 	
 	public static String getReturnToLoginJS()
 	{
