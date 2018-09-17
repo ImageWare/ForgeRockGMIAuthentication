@@ -1,12 +1,15 @@
 package com.iws.forgerock;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.iws.forgerock.ImageWareCommon.UnauthorizedException;
+import com.iws.forgerock.gmi.entity.MessageResponse;
+import com.sun.identity.shared.debug.Debug;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.ResourceBundle;
-
 import javax.inject.Inject;
-
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -15,19 +18,8 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.forgerock.guava.common.collect.ImmutableList;
 import org.forgerock.json.JsonValue;
-import org.forgerock.openam.auth.node.api.Action;
-import org.forgerock.openam.auth.node.api.Action.ActionBuilder;
-import org.forgerock.openam.auth.node.api.Node;
-import org.forgerock.openam.auth.node.api.NodeProcessException;
-import org.forgerock.openam.auth.node.api.OutcomeProvider;
-import org.forgerock.openam.auth.node.api.TreeContext;
+import org.forgerock.openam.auth.node.api.*;
 import org.forgerock.util.i18n.PreferredLocales;
-
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.iws.forgerock.ImageWareCommon.UnauthorizedException;
-import com.iws.forgerock.gmi.entity.MessageResponse;
-import com.sun.identity.shared.debug.Debug;
 
 /**
  * A node that processes the result of an ImageWare biometric verification message for ForgeRock authentication
@@ -40,18 +32,11 @@ public class ImageWareDecision implements Node {
 
 	private final static String DEBUG_FILE = "ImageWareDecision";
 	private Debug debug = Debug.getInstance(DEBUG_FILE);
-	private TokenService tokenService = null;
 	private ResourceBundle resourceBundle;
 	
-	private void setResourceBundle(ResourceBundle resourceBundle)
-	{
-		this.resourceBundle = resourceBundle;
-	}
+	private void setResourceBundle(ResourceBundle resourceBundle) { this.resourceBundle = resourceBundle; }
 	
-	private ResourceBundle getResourceBundle()
-	{
-		return resourceBundle;
-	}
+	private ResourceBundle getResourceBundle() { return resourceBundle; }
 
 	/**
 	 * Configuration for the node.
@@ -71,30 +56,25 @@ public class ImageWareDecision implements Node {
 	public Action process(TreeContext context) throws NodeProcessException {
 		
 		debug.message("ImageWareDecision started");
-    	
-        ResourceBundle bundle = context.request.locales.getBundleInPreferredLocale(ImageWareDecision.BUNDLE, ImageWareDecisionOutcomeProvider.class.getClassLoader());
-		setResourceBundle(bundle);
+
+		setResourceBundle(context.request.locales.getBundleInPreferredLocale(ImageWareDecision.BUNDLE,
+				ImageWareDecisionOutcomeProvider.class.getClassLoader()));
         
-		Boolean verified = null;
-		tokenService = TokenService.getInstance();
+		Boolean verified;
+		TokenService tokenService = TokenService.getInstance();
 		
-		try
-		{
-		
+		try {
 	    	verified = handleVerifyResponse(context.sharedState.get(ImageWareCommon.IMAGEWARE_VERIFY_URL).asString(),
 					context.sharedState.get(ImageWareCommon.IMAGEWARE_OAUTH_BEARER_TOKEN).asString());
 		}
-		catch (UnauthorizedException ue)
-		{
+		catch (UnauthorizedException ue) {
 			tokenService.setBearerToken(null);
 			
-			try
-			{
+			try {
 				verified = handleVerifyResponse(context.sharedState.get(ImageWareCommon.IMAGEWARE_VERIFY_URL).asString(),
 						context.sharedState.get(ImageWareCommon.IMAGEWARE_OAUTH_BEARER_TOKEN).asString());
 			}
-			catch (UnauthorizedException e)
-			{
+			catch (UnauthorizedException e) {
 				debug.error("Cannot successfully use new UserManager OAuth token.");
 				throw new NodeProcessException(e);
 			}
@@ -131,7 +111,8 @@ public class ImageWareDecision implements Node {
 		}
 
 		if (response == null) {
-			String msg = String.format(getResourceBundle().getString("handleVerifyResponseEmpty"), ImageWareCommon.IMAGEWARE_APPLICATION_NAME);
+			String msg = String.format(getResourceBundle().getString("handleVerifyResponseEmpty"), ImageWareCommon
+					.IMAGEWARE_APPLICATION_NAME);
 			debug.error(msg);
 			throw new NodeProcessException(msg);
 		}
@@ -144,7 +125,9 @@ public class ImageWareDecision implements Node {
 			throw ImageWareCommon.getUnauthorizedException(getResourceBundle().getString("unauthorizedAccess"));
 		}			
 		else if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-			throw new NodeProcessException(String.format(getResourceBundle().getString("handleVerifyResponseIncorrectStatus"), ImageWareCommon.IMAGEWARE_APPLICATION_NAME, response.getStatusLine()));
+			throw new NodeProcessException(String.format(getResourceBundle().getString(
+					"handleVerifyResponseIncorrectStatus"), ImageWareCommon.IMAGEWARE_APPLICATION_NAME, response
+					.getStatusLine()));
 		}
 
 
@@ -168,12 +151,8 @@ public class ImageWareDecision implements Node {
 		// So the last entry in the responses is used
 		// while polling for responses it is unlikely more than one will be found
 
-		//Todo Not sure what is going on here. Why are there an array of message response? Also why does the decision
-		//change based one result being true and others being false?
-		
 		int msgCount = messageResponses.size();
-		if (msgCount > 0)
-		{
+		if (msgCount > 0) {
 			MessageResponse messageResponse = messageResponses.get(msgCount - 1);
 			
 			if (messageResponse.getTransactionType().equals("VERIFY") && messageResponse.getSucceeded()) {
