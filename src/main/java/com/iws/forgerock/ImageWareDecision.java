@@ -163,25 +163,32 @@ public class ImageWareDecision implements Node {
 			throw new NodeProcessException(e);
 		}
 
+		// Multiple responses are possible:
+		// If the number of retries allowed is greater than 1 and if the user fails to verify the first time(s)
+		// So the last entry in the responses is used
+		// while polling for responses it is unlikely more than one will be found
 
 		//Todo Not sure what is going on here. Why are there an array of message response? Also why does the decision
 		//change based one result being true and others being false?
-		for (MessageResponse messageResponse : messageResponses) {
+		
+		int msgCount = messageResponses.size();
+		if (msgCount > 0)
+		{
+			MessageResponse messageResponse = messageResponses.get(msgCount - 1);
+			
 			if (messageResponse.getTransactionType().equals("VERIFY") && messageResponse.getSucceeded()) {
 				debug.message("Verification successful");
 				verifyComplete = true;
 			}
-			else if (messageResponse.getTransactionType().equals("REJECT") && !messageResponse.getSucceeded() &&
-					messageResponse.getRejectionInfo().equals("User rejected alert.")) {
+			else if (messageResponse.getTransactionType().equals("REJECT") && messageResponse.getRejectionInfo().equals("User rejected alert.")) {
 				debug.message("Verification was rejected");
 				verifyComplete = false;
 			}
-			else if (messageResponse.getTransactionType().equals("REJECT") && !messageResponse.getSucceeded()) {
+			else if (messageResponse.getTransactionType().equals("REJECT")) {
 				debug.message("Verification has failed or timed out");
 				verifyComplete = false;
 			}
 		}
-
 		return verifyComplete;
 	}
 	
