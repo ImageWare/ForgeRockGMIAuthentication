@@ -7,6 +7,7 @@ import com.iwsinc.usermanager.exception.UserManagerCallFailedException;
 import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
 import com.sun.identity.idm.AMIdentity;
 import com.sun.identity.idm.IdRepoException;
+
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.Iterator;
@@ -29,6 +30,7 @@ class ImageWareCommon {
 			super(message);
 		}
 	}
+	static final String IMAGEWARE_INITIATOR_BUNDLE = "com/iws/forgerock/ImageWareInitiator";
 
 	static final String IMAGEWARE_SHOULD_CHECK = "IMAGEWARE_SHOULD_CHECK";
 	static final String IMAGEWARE_OAUTH_BEARER_TOKEN = "IMAGEWARE_OAUTH_BEARER_TOKEN";
@@ -83,9 +85,17 @@ class ImageWareCommon {
 			errorMessage = bundle.getString("usernameNotAvailable");
 			throw new NodeProcessException(errorMessage);
 		}
-
-		AMIdentity userIdentity = coreWrapper.getIdentity(username, coreWrapper.convertRealmPathToRealmDn(
+		
+		AMIdentity userIdentity = null;
+		try {
+			userIdentity = coreWrapper.getIdentity(username, coreWrapper.convertRealmPathToRealmDn(
 				sharedState.get(REALM).asString()));
+		} 
+		catch (Throwable e)
+		{
+			throw new NodeProcessException(e.getClass() + " " + e.getLocalizedMessage());
+		}
+		
 		if (userIdentity == null) {
 			errorMessage = String.format(bundle.getString("userNotExist"), username);
 			throw new NodeProcessException(errorMessage);
@@ -146,8 +156,7 @@ class ImageWareCommon {
 				emailAddress = sharedState.get(ImageWareCommon.IMAGEWARE_USER_EMAIL).asString();
 			} else {
 				try {
-					emailAddress = getUserEmail(getAmIdentity(coreWrapper, bundle, sharedState, username), bundle);
-					sharedState.add(ImageWareCommon.IMAGEWARE_USER_EMAIL, emailAddress);
+					emailToSharedState();
 				} catch (NodeProcessException ex) {
 					callbacks = ImmutableList.of(new TextOutputCallback(0, ex.getMessage()), new
 							ScriptTextOutputCallback(ImageWareCommon.getReturnToLoginJS()));
@@ -157,6 +166,12 @@ class ImageWareCommon {
 			}
 			exception = false;
 			return this;
+		}
+
+		void emailToSharedState() throws NodeProcessException
+		{
+			emailAddress = getUserEmail(getAmIdentity(coreWrapper, bundle, sharedState, username), bundle);
+			sharedState.add(ImageWareCommon.IMAGEWARE_USER_EMAIL, emailAddress);
 		}
 	}
 }

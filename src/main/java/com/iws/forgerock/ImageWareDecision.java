@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iws.forgerock.ImageWareCommon.UnauthorizedException;
 import com.iws.forgerock.gmi.entity.MessageResponse;
+import com.iwsinc.usermanager.client.OauthBearerToken;
 import com.sun.identity.shared.debug.Debug;
 import java.io.IOException;
 import java.util.Arrays;
@@ -28,16 +29,36 @@ import org.forgerock.util.i18n.PreferredLocales;
 		ImageWareDecision.Config.class)
 public class ImageWareDecision implements Node {
 
+	static final String USER_REJECTED_ALERT_MESSAGE = "User rejected alert.";
+	
 	private static final String BUNDLE = "com/iws/forgerock/ImageWareDecision";
 
 	private final static String DEBUG_FILE = "ImageWareDecision";
 	private Debug debug = Debug.getInstance(DEBUG_FILE);
+	private String gmiServerURL;
 	private ResourceBundle resourceBundle;
+	private ImageWareService imageWareService;
+	
+
+	private String getGmiServerURL() { return gmiServerURL; }
+
+	private void setGmiServerURL(String gmiServerUrl) { this.gmiServerURL = gmiServerUrl; }
 	
 	private void setResourceBundle(ResourceBundle resourceBundle) { this.resourceBundle = resourceBundle; }
 	
 	private ResourceBundle getResourceBundle() { return resourceBundle; }
 
+
+	ImageWareService getImageWareService()
+	{
+		return imageWareService;
+	}
+
+	void setImageWareService(ImageWareService imageWareService)
+	{
+		this.imageWareService = imageWareService;
+	}
+	
 	/**
 	 * Configuration for the node.
 	 */
@@ -61,18 +82,20 @@ public class ImageWareDecision implements Node {
 				ImageWareDecisionOutcomeProvider.class.getClassLoader()));
         
 		Boolean verified;
+		
 		TokenService tokenService = TokenService.getInstance();
+		setGmiServerURL(context.sharedState.get(ImageWareCommon.IMAGEWARE_GMI_SERVER).asString());
+
+		imageWareService = new ImageWareService(tokenService.getBearerToken(), gmiServerURL, getResourceBundle());
 		
 		try {
-	    	verified = handleVerifyResponse(context.sharedState.get(ImageWareCommon.IMAGEWARE_VERIFY_URL).asString(),
-					context.sharedState.get(ImageWareCommon.IMAGEWARE_OAUTH_BEARER_TOKEN).asString());
+	    	verified = handleVerifyResponse(context.sharedState.get(ImageWareCommon.IMAGEWARE_VERIFY_URL).asString());
 		}
 		catch (UnauthorizedException ue) {
 			tokenService.setBearerToken(null);
 			
 			try {
-				verified = handleVerifyResponse(context.sharedState.get(ImageWareCommon.IMAGEWARE_VERIFY_URL).asString(),
-						context.sharedState.get(ImageWareCommon.IMAGEWARE_OAUTH_BEARER_TOKEN).asString());
+				verified = handleVerifyResponse(context.sharedState.get(ImageWareCommon.IMAGEWARE_VERIFY_URL).asString());
 			}
 			catch (UnauthorizedException e) {
 				debug.error("Cannot successfully use new UserManager OAuth token.");
@@ -93,59 +116,14 @@ public class ImageWareDecision implements Node {
 	}
 
 
-	private Boolean handleVerifyResponse(String verifyResponseUrl, String accessToken) throws NodeProcessException, UnauthorizedException {
-		Boolean verifyComplete = null;
-
-		CloseableHttpResponse response;
-		HttpGet httpGet = new HttpGet(verifyResponseUrl);
-		httpGet.setHeader("Content-Type", "application/json");
-		httpGet.setHeader("Authorization", "Bearer " + accessToken);
+	Boolean handleVerifyResponse(String verifyResponseUrl) throws NodeProcessException, UnauthorizedException {
 
 		debug.message("Processing verification...");
+		
+		Boolean verifyComplete = null;
 
-		try {
-			response = HttpClients.createSystem().execute(httpGet);
-		}
-		catch (IOException e) {
-			throw new NodeProcessException(e);
-		}
-
-		if (response == null) {
-			String msg = String.format(getResourceBundle().getString("handleVerifyResponseEmpty"), ImageWareCommon
-					.IMAGEWARE_APPLICATION_NAME);
-			debug.error(msg);
-			throw new NodeProcessException(msg);
-		}
-		// get entity from response
-		HttpEntity entity = response.getEntity();
-
-
-		// investigate response for success/failure
-		if (response.getStatusLine().getStatusCode() == HttpStatus.SC_UNAUTHORIZED) {
-			throw ImageWareCommon.getUnauthorizedException(getResourceBundle().getString("unauthorizedAccess"));
-		}			
-		else if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-			throw new NodeProcessException(String.format(getResourceBundle().getString(
-					"handleVerifyResponseIncorrectStatus"), ImageWareCommon.IMAGEWARE_APPLICATION_NAME, response
-					.getStatusLine()));
-		}
-
-
-		List<MessageResponse> messageResponses;
-		try {
-			messageResponses = Arrays.asList(new ObjectMapper().disable(DeserializationFeature.
-					FAIL_ON_UNKNOWN_PROPERTIES).readValue(EntityUtils.toString(entity), MessageResponse[].class));
-		} catch (IOException e) {
-			throw new NodeProcessException(e);
-		}
-
-		// and ensure it is fully consumed
-		try {
-			EntityUtils.consume(entity);
-		} catch (IOException e) {
-			throw new NodeProcessException(e);
-		}
-
+		List<MessageResponse> messageResponses = imageWareService.getGMIMessageResponses(verifyResponseUrl);
+		
 		// Multiple responses are possible:
 		// If the number of retries allowed is greater than 1 and if the user fails to verify the first time(s)
 		// So the last entry in the responses is used
@@ -159,7 +137,7 @@ public class ImageWareDecision implements Node {
 				debug.message("Verification successful");
 				verifyComplete = true;
 			}
-			else if (messageResponse.getTransactionType().equals("REJECT") && messageResponse.getRejectionInfo().equals("User rejected alert.")) {
+			else if (messageResponse.getTransactionType().equals("REJECT") && messageResponse.getRejectionInfo().equals(USER_REJECTED_ALERT_MESSAGE)) {
 				debug.message("Verification was rejected");
 				verifyComplete = false;
 			}

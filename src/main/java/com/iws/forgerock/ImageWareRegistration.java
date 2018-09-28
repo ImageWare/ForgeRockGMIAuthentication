@@ -21,6 +21,7 @@ import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.assistedinject.Assisted;
+import com.iws.forgerock.ImageWareCommon.UnauthorizedException;
 import com.iws.forgerock.gmi.entity.Application;
 import com.iws.forgerock.gmi.entity.Person;
 import com.iwsinc.usermanager.client.OauthBearerToken;
@@ -61,6 +62,7 @@ public class ImageWareRegistration extends SingleOutcomeNode {
 	
 	private String gmiServerURL;
 	private OauthBearerToken bearerToken;
+	private ImageWareService imageWareService;
 
 	private String getGmiServerURL() { return gmiServerURL; }
 
@@ -69,6 +71,17 @@ public class ImageWareRegistration extends SingleOutcomeNode {
 	private OauthBearerToken getBearerToken() { return bearerToken; }
 
 	private void setBearerToken(OauthBearerToken bearerToken) { this.bearerToken = bearerToken; }
+	
+	ImageWareService getImageWareService()
+	{
+		return imageWareService;
+	}
+
+	void setImageWareService(ImageWareService imageWareService)
+	{
+		this.imageWareService = imageWareService;
+	}
+	
 
 	/**
 	 * Configuration for the node.
@@ -140,6 +153,8 @@ public class ImageWareRegistration extends SingleOutcomeNode {
 
 		TokenService tokenService = TokenService.getInstance();
 
+		imageWareService = new ImageWareService(tokenService.getBearerToken(), gmiServerURL, bundle);
+		
 		// Step 2: authorize oauth client
 		setBearerToken(tokenService.getBearerToken());
 		
@@ -154,12 +169,11 @@ public class ImageWareRegistration extends SingleOutcomeNode {
 			setBearerToken(tokenService.getBearerToken());
 			try {
 				addUserAsPersonToGmi(emailAddress, tenant);
-			} catch (IOException | ImageWareCommon.UnauthorizedException e1) {
+			} catch (ImageWareCommon.UnauthorizedException e1) {
 				throw new NodeProcessException(e1);
 			}
-		} catch (IOException e) {
-			throw new NodeProcessException(e);
 		}
+		
 		// Step 4: user needs to download GoVerifyID app and register with email address
 		//	upon success, user will get a registration email
 		//	after completing the registration step, the user will receive an Enroll Message on their mobile device
@@ -170,140 +184,45 @@ public class ImageWareRegistration extends SingleOutcomeNode {
 		// Otherwise the user must wait for Tenant Admin to finalize the registration process        
 		String userRegisterInfo = userRegistrationMessage + String.format(userSelfRegisterInfoTemplate,
 				applicationName);
-
-		if (!getTenantApplication(tenant, applicationName).getValidationType().equals(ImageWareCommon
-				.IMAGEWARE_EMAIL_VALIDATION_TYPE)) {
-			userRegisterInfo = userRegistrationMessage + userTenantRegisterInfoTemplate;
-		}
+		
+		try {
+			if (!getTenantApplication(tenant, applicationName).getValidationType().equals(ImageWareCommon
+					.IMAGEWARE_EMAIL_VALIDATION_TYPE)) {
+				userRegisterInfo = userRegistrationMessage + userTenantRegisterInfoTemplate;
+			}
+		} catch (NodeProcessException ex) {
+				return Action.send(ImmutableList.of(new TextOutputCallback(0, ex.getMessage()), new
+						ScriptTextOutputCallback(ImageWareCommon.getReturnToLoginJS()))).build();
+		} catch (ImageWareCommon.UnauthorizedException e) {
+			tokenService.setBearerToken(null);
+			setBearerToken(tokenService.getBearerToken());
+			try {
+				if (!getTenantApplication(tenant, applicationName).getValidationType().equals(ImageWareCommon
+						.IMAGEWARE_EMAIL_VALIDATION_TYPE)) {
+					userRegisterInfo = userRegistrationMessage + userTenantRegisterInfoTemplate;
+				}
+			} catch (ImageWareCommon.UnauthorizedException e1) {
+				throw new NodeProcessException(e1);
+			}
+		} 
+		
 		return Action.send(ImmutableList.of(new TextOutputCallback(0, userRegisterInfo), buttonScript))
 				.replaceSharedState(sharedState.put(ImageWareCommon.IMAGEWARE_SHOULD_CHECK, "true")).build();
 		
 	}
 
-	private Application getTenantApplication(String tenant, String applicationName) throws NodeProcessException {
-		Application application = null;
-		CloseableHttpResponse response = null;
-		OauthBearerToken token = getBearerToken();
-
-		try {
-			HttpGet httpGet = new HttpGet(gmiServerURL + "/tenant/" + tenant + "/app/" + applicationName);
-			httpGet.setHeader("Content-Type", "application/json");
-			httpGet.setHeader("Authorization", "Bearer " + token.getAccessToken());
-
-			CloseableHttpClient httpclient = HttpClients.createSystem();
-
-			try {
-				response = httpclient.execute(httpGet);
-				if (response != null) {
-					// get entity from response
-					org.apache.http.HttpEntity entity = response.getEntity();
-
-					String jsonResponse = EntityUtils.toString(entity);
-
-					// investigate response for success/failure
-					if (response.getStatusLine().getStatusCode() == HttpStatus.SC_UNAUTHORIZED) {
-						throw ImageWareCommon.getUnauthorizedException("Unauthorized access. May need a new OAuth token");
-					}			
-					else if (response.getStatusLine().getStatusCode() == org.apache.http.HttpStatus.SC_OK) {
-						ObjectMapper objectMapper = new ObjectMapper();
-						objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-						application = objectMapper.readValue(jsonResponse, Application.class);
-
-						debug.message("json from GMI server: '{}'", jsonResponse);
-					}
-					else {
-						UserManagerCallFailedException e = new UserManagerCallFailedException();
-						String msg = String.format("Error in contacting GMI Server. Status: %s", response.getStatusLine());
-						e.setMessageCode(msg);
-						throw e;
-					}
-
-					// and ensure it is fully consumed
-					EntityUtils.consume(entity);
-				}
-				else {
-					debug.error("Error. No response from {}", ImageWareCommon.IMAGEWARE_APPLICATION_NAME);
-				}
-
-			}
-			catch (Exception exp) {
-				debug.error("Exception in {} getTenantApplication: '{}'", ImageWareCommon.IMAGEWARE_APPLICATION_NAME, exp.getMessage());
-				throw exp;
-			}
-		}
-		catch (Exception exp) {
-			debug.error(exp.getMessage());
-
-		}
-		finally {
-			if (response != null) try {
-				response.close();
-			} catch (Throwable ignored) {
-			}
-		}
+	Application getTenantApplication(String tenant, String applicationName) throws NodeProcessException, UnauthorizedException {
+		
+		Application application = imageWareService.getTenantApplication(tenant, applicationName);
 		if (application == null) throw new NodeProcessException("GMI Application is null");
 
 		return application;
 	}
 
 	
-	private void addUserAsPersonToGmi(String emailAddress, String tenant) throws NodeProcessException,
-			IOException, ImageWareCommon.UnauthorizedException {
-		Person person = null;
-		CloseableHttpResponse response;
-		OauthBearerToken token = getBearerToken();
-	
-		String gmiUrl = getGmiServerURL() + "/tenant/" + tenant + "/person";
-		HttpPost httpPost = new HttpPost(gmiUrl);
-		httpPost.setHeader("Content-Type", "application/json");
-		httpPost.setHeader("Authorization", "Bearer " + token.getAccessToken());
-		String messageJson = "{" + "\"userId\" : \"" + emailAddress + "\" }";
-		httpPost.setEntity(new StringEntity(messageJson));
-		CloseableHttpClient httpclient = HttpClients.createSystem();
-		response = httpclient.execute(httpPost);
-
-		if (response != null) {
-			// investigate response for success/failure
-			int statusCode = response.getStatusLine().getStatusCode();
-			if (statusCode == HttpStatus.SC_UNAUTHORIZED)
-				throw ImageWareCommon.getUnauthorizedException(String.format("Unauthorized access. May need a new " +
-						"OAuth token: %s", response.getStatusLine()));
-			else if (statusCode == HttpStatus.SC_CONFLICT) {
-				// if person exists in GMI, get the Person record
-				String emailAddressEncoded = ImageWareCommon.encodeEmailAddress(emailAddress);
-
-				HttpGet httpGet = new HttpGet(getGmiServerURL() + "/person?userId=" + emailAddressEncoded);
-				httpGet.setHeader("Content-Type", "application/json");
-				httpGet.setHeader("Authorization", "Bearer " + token.getAccessToken());
-
-
-				CloseableHttpResponse getResponse = httpclient.execute(httpGet);
-
-				if (getResponse != null) {
-					// get entity from response
-					HttpEntity entity = getResponse.getEntity();
-
-					person = new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue
-							(EntityUtils.toString(entity), Person.class);
-
-					// and ensure it is fully consumed
-					EntityUtils.consume(entity);
-				}
-			} else if (statusCode == HttpStatus.SC_CREATED) {
-				// get entity from response
-				HttpEntity entity = response.getEntity();
-
-				person = new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue
-						(EntityUtils.toString(entity), Person.class);
-
-				// and ensure it is fully consumed
-				EntityUtils.consume(entity);
-
-			} else {
-				String msg = String.format("Cannot add user. Status: %s", response.getStatusLine());
-				debug.error(msg);
-			}
-		}
+	void addUserAsPersonToGmi(String emailAddress, String tenant) throws NodeProcessException, UnauthorizedException {		
+		
+		Person person = imageWareService.addPerson(emailAddress, tenant);
 		if (person == null) throw new NodeProcessException("GMI Person is null");
 	}
 

@@ -18,35 +18,28 @@ package com.iws.forgerock;
 
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
+import java.util.ResourceBundle;
+
+import javax.inject.Inject;
+
+import org.forgerock.json.JsonValue;
+import org.forgerock.openam.annotations.sm.Attribute;
+import org.forgerock.openam.auth.node.api.AbstractDecisionNode;
+import org.forgerock.openam.auth.node.api.Action;
+import org.forgerock.openam.auth.node.api.Node;
+import org.forgerock.openam.auth.node.api.NodeProcessException;
+import org.forgerock.openam.auth.node.api.TreeContext;
+import org.forgerock.openam.core.CoreWrapper;
+import org.forgerock.openam.sm.annotations.adapters.Password;
+
 import com.google.inject.assistedinject.Assisted;
 import com.iws.forgerock.ImageWareCommon.UnauthorizedException;
 import com.iws.forgerock.gmi.entity.DeviceApplication;
 import com.iws.forgerock.gmi.entity.Message;
 import com.iws.forgerock.gmi.entity.Person;
-import com.iwsinc.usermanager.client.OauthBearerToken;
 import com.sun.identity.shared.debug.Debug;
 import com.sun.identity.sm.RequiredValueValidator;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.ResourceBundle;
-import javax.inject.Inject;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpStatus;
-import org.apache.http.StatusLine;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.util.EntityUtils;
-import org.forgerock.json.JsonValue;
-import org.forgerock.openam.annotations.sm.Attribute;
-import org.forgerock.openam.auth.node.api.*;
-import org.forgerock.openam.core.CoreWrapper;
-import org.forgerock.openam.sm.annotations.adapters.Password;
 
 /**
  * A node that verifies a user account exists in the ImageWare GoVerifyID user
@@ -55,16 +48,36 @@ import org.forgerock.openam.sm.annotations.adapters.Password;
 @Node.Metadata(outcomeProvider = AbstractDecisionNode.OutcomeProvider.class, configClass = ImageWareInitiator.Config.class)
 public class ImageWareInitiator extends AbstractDecisionNode {
 	
-
-	private static final String BUNDLE = "com/iws/forgerock/ImageWareInitiator";
 	
 	private final Config config;
 	private final CoreWrapper coreWrapper;
 	private final static String DEBUG_FILE = "ImageWareInitiator";
 	private Debug debug = Debug.getInstance(DEBUG_FILE);
+	private Person person;
+	private ImageWareService imageWareService;
 	private ResourceBundle resourceBundle;
+	
+	Person getPerson()
+	{
+		return person;
+	}
 
-	private void setResourceBundle(ResourceBundle resourceBundle) { this.resourceBundle = resourceBundle; }
+	void setPerson(Person person)
+	{
+		this.person = person;
+	}
+
+	ImageWareService getImageWareService()
+	{
+		return imageWareService;
+	}
+
+	void setImageWareService(ImageWareService imageWareService)
+	{
+		this.imageWareService = imageWareService;
+	}
+
+	void setResourceBundle(ResourceBundle resourceBundle) { this.resourceBundle = resourceBundle; }
 	
 	private ResourceBundle getResourceBundle() { return resourceBundle; }
 
@@ -117,7 +130,8 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 	public Action process(TreeContext context) throws NodeProcessException {
 
 		debug.message("ImageWareInitiator started");
-		setResourceBundle(context.request.locales.getBundleInPreferredLocale(ImageWareInitiator.BUNDLE,
+		
+		setResourceBundle(context.request.locales.getBundleInPreferredLocale(ImageWareCommon.IMAGEWARE_INITIATOR_BUNDLE,
 				ImageWareInitiator.class.getClassLoader()));
 
 		JsonValue sharedState = context.sharedState;
@@ -138,15 +152,17 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 		
 		String tenant = config.tenantName();
 		String gmiServerURL = config.gmiServerURL();
-		Person person;
+		
+
+		imageWareService = new ImageWareService(tokenService.getBearerToken(), gmiServerURL, getResourceBundle());
 
 		try {
-			person = validateUser(emailAddress, tokenService.getBearerToken(), gmiServerURL);
+			person = validateUser(emailAddress);
 		} catch (UnauthorizedException ue) {
 			tokenService.setBearerToken(null);
 			
 			try {
-				person = validateUser(emailAddress, tokenService.getBearerToken(), gmiServerURL);
+				person = validateUser(emailAddress);
 			} catch (UnauthorizedException e) {
 				debug.error("Cannot successfully use new UserManager OAuth token.");
 				throw new NodeProcessException(e);
@@ -170,16 +186,11 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 		debug.message("IWS Message JSON: {} ", messageJson);
 
 		try {
-			biometricVerifyUser(sharedState, tokenService.getBearerToken(),templatePath + "/person/" + person.getId
-					() + "/message", gmiServerURL + "/tenant/" + tenant + "/person/" + person.getId() +
-					"/message/%s/response", messageJson);
+			biometricVerifyUser(sharedState, messageJson);
 		} catch (UnauthorizedException ue) {
 			tokenService.setBearerToken(null);
 			try {
-				biometricVerifyUser(sharedState, tokenService.getBearerToken(), templatePath + "/person/" + person.getId
-								() + "/message",
-						gmiServerURL + "/tenant/" + tenant + "/person/" + person.getId() + "/message/%s/response",
-						messageJson);
+				biometricVerifyUser(sharedState, messageJson);
 			} catch (UnauthorizedException e) {
 				debug.error("Cannot successfully use new UserManager OAuth token.");
 				throw new NodeProcessException(e);
@@ -192,136 +203,33 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 				put(ImageWareCommon.IMAGEWARE_OAUTH_BEARER_TOKEN, tokenService.getBearerToken().getAccessToken()))
 				.build();
 	}
+	
 
-	private void biometricVerifyUser(JsonValue sharedState, OauthBearerToken token, String
-			gmiMessageUrl, String gmiVerifyUrlTemp, String messageJson) throws NodeProcessException, UnauthorizedException {
+	void biometricVerifyUser(JsonValue sharedState, String messageJson) throws NodeProcessException, UnauthorizedException {
 
-		CloseableHttpResponse response;
-		HttpPost httpPost = new HttpPost(gmiMessageUrl);
-		httpPost.setHeader("Content-Type", "application/json");
-		httpPost.setHeader("Authorization", "Bearer " + token.getAccessToken());
-		
-		try {
-			httpPost.setEntity(new StringEntity(messageJson));
-			response = HttpClients.createSystem().execute(httpPost);
-		}
-		catch (IOException e) {
-			throw new NodeProcessException(e);
-		}
+		Message message = imageWareService.postGMIMessage(config.tenantName(), config.gmiApplicationName(), config.gmiTemplateName(), person, messageJson);
 
-		// investigate response for success/failure
-		StatusLine statusLine = response.getStatusLine();
-
-		if (response.getStatusLine().getStatusCode() == HttpStatus.SC_UNAUTHORIZED) throw ImageWareCommon
-				.getUnauthorizedException(getResourceBundle().getString("unauthorizedAccess"));
-		else if (statusLine.getStatusCode() != HttpStatus.SC_CREATED) {
-			String msg = String.format(getResourceBundle().getString("gmiVerificationError"), ImageWareCommon
-					.IMAGEWARE_APPLICATION_NAME, statusLine.getStatusCode(), statusLine.getReasonPhrase());
-			debug.error(msg);
-			throw new NodeProcessException(msg);
-		}
-
-		Message message;
-		try {
-			message = new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue
-					(EntityUtils.toString(response.getEntity()), Message.class);
-		} catch (IOException e) {
-			throw new NodeProcessException(e);
-		}
 
 		if (message == null || message.getMessageId() == null) throw new NodeProcessException(getResourceBundle()
 				.getString("cannotReadGmiMessage"));
 
+		String gmiVerifyUrlTemp = config.gmiServerURL() + "/tenant/" + config.tenantName() + "/person/" + person.getId() + "/message/%s/response";
+		
 		// share verification response url in state for retrieval later
 		sharedState.put(ImageWareCommon.IMAGEWARE_VERIFY_URL, String.format(gmiVerifyUrlTemp, message.getMessageId()));
 		debug.message("biometricVerifyUser returning true for sending message and moving to next step");
 	}
-
 	
-	private Person validateUser(String emailAddress, OauthBearerToken token, String gmiServerURL) throws
+	
+	Person validateUser(String emailAddress) throws
 			UnauthorizedException, NodeProcessException {
-		Person person;
-		CloseableHttpResponse response;
-
-		String emailAddressEncoded = ImageWareCommon.encodeEmailAddress(emailAddress);
 		
-		HttpGet httpGet = new HttpGet(gmiServerURL + "/person?userId=" + emailAddressEncoded);
-		httpGet.setHeader("Content-Type", "application/json");
-		httpGet.setHeader("Authorization", "Bearer " + token.getAccessToken());
-
-		try {
-			response =  HttpClients.createSystem().execute(httpGet);
-		} catch (IOException e) {
-			debug.error("Exception in validateUser: '{}'", e);
-			throw new NodeProcessException(e);
-		}
-
-		if (response == null) throw new NodeProcessException(String.format(getResourceBundle().getString("noResponse"),
-					ImageWareCommon.IMAGEWARE_APPLICATION_NAME));
-
-		// investigate response for success/failure
-		if (response.getStatusLine().getStatusCode() == HttpStatus.SC_NOT_FOUND) return null;
-		else if (response.getStatusLine().getStatusCode() == HttpStatus.SC_UNAUTHORIZED) throw ImageWareCommon
-				.getUnauthorizedException(getResourceBundle().getString("unauthorizedAccess"));
-		else if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) throw ImageWareCommon
-				.getUserManagerCallFailedException(String.format(getResourceBundle().getString("errorUserManager"),
-						response.getStatusLine()));
-
-
-		try {
-			// get entity from response
-			HttpEntity entity = response.getEntity();
-			
-			person = new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue
-					(EntityUtils.toString(entity), Person.class);
-			// and ensure it is fully consumed
-			EntityUtils.consume(entity);
-		} catch (IOException e) {
-			throw new NodeProcessException(e);
-		}
+		person = imageWareService.getGMIPerson(emailAddress);
 
 		if (person == null) throw new NodeProcessException("Person is null");
 		
 		// validate person is registered
-		httpGet = new HttpGet(gmiServerURL + "/person/" + person.getId() + "/app/" + config.gmiApplicationName() +
-				"/device");
-		httpGet.setHeader("Content-Type", "application/json");
-		httpGet.setHeader("Authorization", "Bearer " + token.getAccessToken());
-		
-		try {
-			response =  HttpClients.createSystem().execute(httpGet);
-		} catch (IOException e) {
-			debug.error("Exception in validateUser: '{}'", e);
-			throw new NodeProcessException(e);
-		}
-
-		if (response == null) {
-			throw new NodeProcessException(String.format(getResourceBundle().getString("noResponse"),
-					ImageWareCommon.IMAGEWARE_APPLICATION_NAME));
-		}
-
-		// investigate response for success/failure
-		if (response.getStatusLine().getStatusCode() == HttpStatus.SC_UNAUTHORIZED) {
-			throw ImageWareCommon.getUnauthorizedException(getResourceBundle().getString("unauthorizedAccess"));
-		}			
-		else if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-			throw ImageWareCommon.getUserManagerCallFailedException(String.format(getResourceBundle().getString
-					("errorUserManager"), response.getStatusLine()));
-		}
-
-		List<DeviceApplication> devices;
-		try {
-
-			// get entity from response
-			HttpEntity entity = response.getEntity();
-			
-			devices = Arrays.asList(new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-					.readValue(EntityUtils.toString(entity), DeviceApplication[].class));
-			// and ensure it is fully consumed
-			EntityUtils.consume(entity);
-		} catch (IOException e) {
-			throw new NodeProcessException(e);
-		}
+		List<DeviceApplication> devices = imageWareService.getPersonDevices(person, config.gmiApplicationName());
 
 		// check for not yet registered or not yet enrolled scenario
 		if ( devices.isEmpty() || person.getData() == null || person.getData().getBiometricMetadata() == null ) {
