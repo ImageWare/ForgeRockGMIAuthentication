@@ -277,7 +277,7 @@ public class ImageWareService
 	{
 		
 		Application application = null;
-		String gmiUrl = getGmiServerUrl() + "/tenant/" + tenant + "/person";
+		String gmiUrl = getGmiServerUrl() + "/tenant/" + tenant + "/app/" + applicationName;
 
 		CloseableHttpResponse response = getResponseFromImageWare(gmiUrl);
 

@@ -226,7 +226,7 @@ public class ImageWareInitiator extends AbstractDecisionNode {
 		
 		person = imageWareService.getGMIPerson(emailAddress);
 
-		if (person == null) throw new NodeProcessException("Person is null");
+		if (person == null) return person;
 		
 		// validate person is registered
 		List<DeviceApplication> devices = imageWareService.getPersonDevices(person, config.gmiApplicationName());
