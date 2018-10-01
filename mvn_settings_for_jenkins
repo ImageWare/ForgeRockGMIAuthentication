@@ -1,0 +1,24 @@
+<settings>
+<profiles>
+  <profile>
+  <id>forgerock</id>
+  <repositories>
+      <repository>
+          <id>forgerock-private-releases</id>
+          <url>https://maven.forgerock.org:443/repo/private-releases</url>
+          <releases>
+              <enabled>true</enabled>
+              <checksumPolicy>fail</checksumPolicy>
+          </releases>
+          <snapshots>
+              <enabled>false</enabled>
+              <checksumPolicy>warn</checksumPolicy>
+          </snapshots>
+      </repository>
+  </repositories>
+  </profile>
+</profiles>
+<activeProfiles>
+  <activeProfile>forgerock</activeProfile>
+</activeProfiles>
+</settings>
