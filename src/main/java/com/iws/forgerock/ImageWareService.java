@@ -25,6 +25,7 @@ import com.iws.forgerock.gmi.entity.Message;
 import com.iws.forgerock.gmi.entity.MessageResponse;
 import com.iws.forgerock.gmi.entity.Person;
 import com.iwsinc.usermanager.client.OauthBearerToken;
+import com.iwsinc.usermanager.client.UserManagerClient;
 import com.iwsinc.usermanager.exception.UserManagerCallFailedException;
 
 public class ImageWareService
@@ -33,13 +34,13 @@ public class ImageWareService
 	private OauthBearerToken token;
 	private String gmiServerUrl;
 	private ResourceBundle resourceBundle;
-	
+	private static UserManagerClient userManagerClient = new UserManagerClient();
+
 	public ImageWareService(OauthBearerToken token, String gmiServerUrl, ResourceBundle resourceBundle)
 	{
 		this.token = token;
 		this.gmiServerUrl = gmiServerUrl;
 		this.resourceBundle = resourceBundle;
-
 	}
 	
 	public OauthBearerToken getToken()
@@ -357,7 +358,6 @@ public class ImageWareService
 		}
 
 		return messageResponses;
-
-
 	}
+
 }

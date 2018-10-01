@@ -33,7 +33,7 @@ public class ImageWareCommonTest
 	{
 
 		username = "";
-		ImageWareCommon.EmailObject emailObject = new ImageWareCommonUsernameUnavailable.EmailObject(coreWrapper, resourceBundle, sharedState, username).getEmailObject();
+		ImageWareCommon.EmailObject emailObject = new ImageWareCommonStubUsernameUnavailable.EmailObject(coreWrapper, resourceBundle, sharedState, username).getEmailObject();
 		
 		NodeProcessException npe = null;
 		String message = resourceBundle.getString("usernameNotAvailable");
@@ -183,7 +183,7 @@ public class ImageWareCommonTest
 		}
 	}
 
-	static class ImageWareCommonUsernameUnavailable extends ImageWareCommon
+	static class ImageWareCommonStubUsernameUnavailable extends ImageWareCommon
 	{
 
 		public static String EXCEPTION_MSG = resourceBundle.getString("usernameNotAvailable");
