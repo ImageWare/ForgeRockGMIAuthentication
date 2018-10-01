@@ -1,4 +1,11 @@
 <settings>
+<servers>
+    <server>
+      <username>imageware</username>
+      <password>AP7S5MMYYyqyyo8SDnD2D3y6RLy</password>
+      <id>forgerock-internal-snapshots</id>
+    </server>
+</servers>
 <profiles>
   <profile>
   <id>forgerock</id>
