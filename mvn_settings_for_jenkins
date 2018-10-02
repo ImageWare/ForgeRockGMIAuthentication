@@ -1,11 +1,61 @@
 <settings>
-<servers>
+  <servers>
     <server>
       <username>imageware</username>
       <password>AP7S5MMYYyqyyo8SDnD2D3y6RLy</password>
       <id>forgerock-internal-snapshots</id>
     </server>
-</servers>
+    <server>
+      <username>imageware</username>
+      <password>AP7S5MMYYyqyyo8SDnD2D3y6RLy</password>
+      <id>forgerock-internal-releases</id>
+    </server>
+    <server>
+      <username>imageware</username>
+      <password>AP7S5MMYYyqyyo8SDnD2D3y6RLy</password>
+      <id>forgerock-snapshots-repository</id>
+    </server>
+    <server>
+      <username>imageware</username>
+      <password>AP7S5MMYYyqyyo8SDnD2D3y6RLy</password>
+      <id>forgerock-staging-repository</id>
+    </server>
+    <server>
+      <username>imageware</username>
+      <password>AP7S5MMYYyqyyo8SDnD2D3y6RLy</password>
+      <id>forgerock-snapshots-repo</id>
+    </server>
+    <server>
+      <username>imageware</username>
+      <password>AP7S5MMYYyqyyo8SDnD2D3y6RLy</password>
+      <id>forgerock-staging-repo</id>
+    </server>
+    <server>
+      <username>imageware</username>
+      <password>AP7S5MMYYyqyyo8SDnD2D3y6RLy</password>
+      <id>forgerock-internal</id>
+    </server>
+    <server>
+      <username>imageware</username>
+      <password>AP7S5MMYYyqyyo8SDnD2D3y6RLy</password>
+      <id>forgerock-private-snapshots</id>
+    </server>
+    <server>
+      <username>imageware</username>
+      <password>AP7S5MMYYyqyyo8SDnD2D3y6RLy</password>
+      <id>forgerock-private-releases</id>
+    </server>
+    <server>
+      <username>imageware</username>
+      <password>AP7S5MMYYyqyyo8SDnD2D3y6RLy</password>
+      <id>forgerock-third-party</id>
+    </server>
+    <server>
+      <username>imageware</username>
+      <password>AP7S5MMYYyqyyo8SDnD2D3y6RLy</password>
+      <id>forgerock-plugins-repository</id>
+    </server>
+  </servers>
 <profiles>
   <profile>
   <id>forgerock</id>
@@ -25,7 +75,9 @@
   </repositories>
   </profile>
 </profiles>
+<!--
 <activeProfiles>
   <activeProfile>forgerock</activeProfile>
 </activeProfiles>
+-->
 </settings>
