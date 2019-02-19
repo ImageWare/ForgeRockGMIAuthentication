@@ -18,21 +18,6 @@ package com.iws.forgerock;
 
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.inject.assistedinject.Assisted;
-import com.iws.forgerock.gmi.entity.Application;
-import com.iws.forgerock.gmi.entity.Person;
-import com.iwsinc.usermanager.client.OauthBearerToken;
-import com.iwsinc.usermanager.exception.UserManagerCallFailedException;
-import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
-import com.sun.identity.shared.debug.Debug;
-import java.io.IOException;
-import java.util.List;
-import java.util.ResourceBundle;
-import javax.inject.Inject;
-import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.TextOutputCallback;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -42,10 +27,34 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
-import org.forgerock.guava.common.collect.ImmutableList;
 import org.forgerock.json.JsonValue;
-import org.forgerock.openam.auth.node.api.*;
+import org.forgerock.openam.auth.node.api.Action;
+import org.forgerock.openam.auth.node.api.Node;
+import org.forgerock.openam.auth.node.api.NodeProcessException;
+import org.forgerock.openam.auth.node.api.SingleOutcomeNode;
+import org.forgerock.openam.auth.node.api.TreeContext;
 import org.forgerock.openam.core.CoreWrapper;
+
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableList;
+import com.iws.forgerock.gmi.entity.Application;
+import com.iws.forgerock.gmi.entity.Person;
+import com.iwsinc.usermanager.client.OauthBearerToken;
+import com.iwsinc.usermanager.exception.UserManagerCallFailedException;
+import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
+import com.sun.identity.shared.debug.Debug;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.ResourceBundle;
+import javax.inject.Inject;
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.TextOutputCallback;
+
+//<<<<<<< Updated upstream
+//=======
+//>>>>>>> Stashed changes
 
 /**
  * A node that creates a User in ImageWare's GoVerifyID backend for mobile biometric enrollment and verification
@@ -73,7 +82,7 @@ public class ImageWareRegistration extends SingleOutcomeNode {
 	/**
 	 * Configuration for the node.
 	 */
-	interface Config {
+	public interface Config {
 	}
 
 	@Inject

@@ -2,6 +2,7 @@ package com.iws.forgerock;
 
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
 
+import com.google.common.collect.ImmutableList;
 import com.iplanet.sso.SSOException;
 import com.iwsinc.usermanager.exception.UserManagerCallFailedException;
 import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
@@ -15,7 +16,6 @@ import java.util.ResourceBundle;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.TextOutputCallback;
 import org.apache.commons.lang.StringUtils;
-import org.forgerock.guava.common.collect.ImmutableList;
 import org.forgerock.json.JsonValue;
 import org.forgerock.openam.auth.node.api.NodeProcessException;
 import org.forgerock.openam.core.CoreWrapper;
