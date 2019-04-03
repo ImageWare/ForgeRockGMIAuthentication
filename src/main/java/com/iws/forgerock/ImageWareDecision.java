@@ -1,26 +1,32 @@
 package com.iws.forgerock;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.iws.forgerock.ImageWareCommon.UnauthorizedException;
-import com.iws.forgerock.gmi.entity.MessageResponse;
-import com.iwsinc.usermanager.client.OauthBearerToken;
-import com.sun.identity.shared.debug.Debug;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.ResourceBundle;
-import javax.inject.Inject;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
-import org.forgerock.guava.common.collect.ImmutableList;
 import org.forgerock.json.JsonValue;
-import org.forgerock.openam.auth.node.api.*;
+import org.forgerock.openam.auth.node.api.Action;
+import org.forgerock.openam.auth.node.api.Node;
+import org.forgerock.openam.auth.node.api.NodeProcessException;
+import org.forgerock.openam.auth.node.api.OutcomeProvider;
+import org.forgerock.openam.auth.node.api.TreeContext;
 import org.forgerock.util.i18n.PreferredLocales;
+
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableList;
+import com.iws.forgerock.ImageWareCommon.UnauthorizedException;
+import com.iws.forgerock.gmi.entity.MessageResponse;
+import com.iwsinc.usermanager.client.OauthBearerToken;
+import com.sun.identity.shared.debug.Debug;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.ResourceBundle;
+import javax.inject.Inject;
 
 /**
  * A node that processes the result of an ImageWare biometric verification message for ForgeRock authentication
@@ -62,7 +68,7 @@ public class ImageWareDecision implements Node {
 	/**
 	 * Configuration for the node.
 	 */
-	interface Config {
+	public interface Config {
 
 	}
 
