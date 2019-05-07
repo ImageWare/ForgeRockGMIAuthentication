@@ -125,31 +125,34 @@ public class ImageWareDecision implements Node {
 	Boolean handleVerifyResponse(String verifyResponseUrl) throws NodeProcessException, UnauthorizedException {
 
 		debug.message("Processing verification...");
-		
+		debug.message("verifyResponseUrl {}.", verifyResponseUrl);
 		Boolean verifyComplete = null;
 
 		List<MessageResponse> messageResponses = imageWareService.getGMIMessageResponses(verifyResponseUrl);
 		
 		// Multiple responses are possible:
 		// If the number of retries allowed is greater than 1 and if the user fails to verify the first time(s)
-		// So the last entry in the responses is used
-		// while polling for responses it is unlikely more than one will be found
+		// we must cycle through all the responses and find either a REJECT or a Successful VERIFY
 
 		int msgCount = messageResponses.size();
+		String m_count = Integer.toString(msgCount);
+		debug.message("Message count {}.", m_count);
 		if (msgCount > 0) {
-			MessageResponse messageResponse = messageResponses.get(msgCount - 1);
-			
-			if (messageResponse.getTransactionType().equals("VERIFY") && messageResponse.getSucceeded()) {
-				debug.message("Verification successful");
-				verifyComplete = true;
-			}
-			else if (messageResponse.getTransactionType().equals("REJECT") && messageResponse.getRejectionInfo().equals(USER_REJECTED_ALERT_MESSAGE)) {
-				debug.message("Verification was rejected");
-				verifyComplete = false;
-			}
-			else if (messageResponse.getTransactionType().equals("REJECT")) {
-				debug.message("Verification has failed or timed out");
-				verifyComplete = false;
+			MessageResponse checkResponse;
+			for (int i=0; i<msgCount; i++) {
+				checkResponse = messageResponses.get(i);
+				if(checkResponse.getTransactionType().equals("REJECT") && checkResponse.getRejectionInfo().equals(USER_REJECTED_ALERT_MESSAGE)) {
+					debug.message("Verification was rejected");
+					verifyComplete = false;
+				}
+				else if(checkResponse.getTransactionType().equals("REJECT")) {
+					debug.message("Verification failed");
+					verifyComplete = false;
+				}
+				else if (checkResponse.getTransactionType().equals("VERIFY") && checkResponse.getSucceeded()) {
+					debug.message("Verification successful");
+					verifyComplete = true;
+				}
 			}
 		}
 		return verifyComplete;
