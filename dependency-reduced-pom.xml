@@ -10,10 +10,10 @@
   <groupId>com.iws</groupId>
   <artifactId>ImageWareAuthentication</artifactId>
   <name>Template for an Auth Tree Node maven project</name>
-  <version>1.1.0</version>
+  <version>1.2</version>
   <description>An Authentication Tree Node for ForgeRock's Identity Platform</description>
   <build>
-    <finalName>ImageWareAuthentication-1.1.0</finalName>
+    <finalName>ImageWareAuthentication-1.2</finalName>
     <plugins>
       <plugin>
         <artifactId>maven-shade-plugin</artifactId>
